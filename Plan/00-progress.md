@@ -14,8 +14,8 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | Phase | Title | Status | Gate passed |
 |---|---|---|---|
 | 0 | Monorepo scaffold | 🟡 gate GREEN | pending review/commit |
-| 1 | Terraform base infra | ⬜ | — |
-| 2 | Database schema (Prisma) | ⛔ blocked on scope decisions | — |
+| 1 | Terraform base infra | 🟡 gate GREEN | pending review/commit |
+| 2 | Database schema (Prisma) | 🟢 unblocked (Stripe + multi-property set) | — |
 | 3 | NestJS booking API core | ⬜ | — |
 | 4 | Auth & access control | ⬜ | — |
 | 5 | Public web app | ⬜ | — |
@@ -32,11 +32,14 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 
 Per Plan/01 line 139 — resolve before schema work; do not guess.
 
-- [ ] **Payment provider** + required regional method(s) — `PB-01`, `PB-02`.
-- [ ] **Multi-property day one?** `ST-18` (C) vs. property-scoped roles §5.6 (M).
-      (`propertyId` goes on scoped entities regardless — CLAUDE.md invariant #10.)
-- [ ] **Target markets** → supported languages / currencies — `SD-06`, `PB-06`.
+- [x] **Payment provider:** **Stripe** (hosted fields + webhooks, no card data on our servers) — `PB-01`, `PB-02`, `PB-05`. _(confirmed 2026-08-22)_
+- [x] **Multi-property day one:** **Yes** — full multi-property management in v1;
+      `ST-18` promoted to in-scope; `propertyId` on every scoped entity. _(confirmed 2026-08-22)_
+- [ ] **Target markets** → supported languages / currencies — `SD-06`, `PB-06`. _(still open — needed for Phase 2 currency/locale seed data)_
 - [ ] **v1 scope cut:** confirm which `S`/`C` requirements are deferred.
+
+**Process:** phase-by-phase with a review gate between phases. Scaffold left
+**uncommitted** at the user's request (no initial commit yet).
 
 ---
 
@@ -72,14 +75,29 @@ this phase.
 
 ---
 
-## Phase 1 — Terraform Base Infrastructure  ⬜
+## Phase 1 — Terraform Base Infrastructure  🟡 gate GREEN
 
 **Satisfies (infra enabling):** `NF-01` (spike resilience — ECS/ALB/autoscale),
 `NF-03`/`NF-06`, security §5.7 (`tfsec`/`checkov` clean, no public buckets).
 
-**Gate:** `terraform validate` + `terraform plan` clean for `staging/`; `tfsec`
-passes; no `0.0.0.0/0` ingress except 443/80 on ALB SG; S3 buckets private +
-encrypted; `prod/` scaffolded (Multi-AZ vars) but not applied.
+**Gate:**
+
+- [x] 7 reusable modules under `modules/` (network, security, compute, database, cache, storage, cdn).
+- [x] `staging/` wires them (single-AZ, single NAT, small instances); `terraform validate` → **valid**.
+- [x] `prod/` scaffolded with SAME modules (Multi-AZ RDS, HA Redis, per-AZ NAT, larger instances); validates; **not applied** (stub).
+- [x] `bootstrap/` remote-state (S3 + DynamoDB lock) validates.
+- [x] `tfsec terraform` → **0 critical/high/medium/low** (173 passed, 32 justified inline ignores).
+- [x] Only `0.0.0.0/0` ingress is 443/80 on the ALB SG; all S3 buckets private (public access blocked) + encrypted; RDS/Redis encrypted at rest + Redis in transit.
+- [x] `terraform fmt -recursive` clean.
+- [ ] `terraform plan` against real AWS — **deferred**: needs account creds + `bootstrap` applied. Not runnable in this environment.
+
+**Verification evidence (2026-08-22):**
+- `terraform validate` → "Success! The configuration is valid." for staging, prod, bootstrap.
+- `tfsec terraform` → "No problems detected!" (173 passed, 32 ignored, 0 findings).
+- 34 `.tf` files; WAF (managed SQLi/common + rate-based) in us-east-1; CloudFront OAC to private S3; VPC flow logs on.
+
+**Note:** `checkov` not installed on this machine; `tfsec` used as the scanner
+(Phase 10 CI wires both). Real `terraform plan`/`apply` pending AWS credentials.
 
 ---
 

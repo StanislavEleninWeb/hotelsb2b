@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and fill in. Do NOT commit real tfvars (gitignored).
+aws_region = "eu-west-1"
+environment = "staging"
+
+# Must be globally unique across all of S3.
+assets_bucket_name = "hotel-staging-assets-CHANGE-ME"
+
+# Optional until DNS/certs exist. Leave empty for the default CloudFront domain
+# and an HTTP-only ALB listener (staging scaffold).
+domain_name         = ""
+acm_certificate_arn = ""   # us-east-1 cert for CloudFront custom domain
+alb_certificate_arn = ""   # regional cert for the ALB HTTPS listener
+route53_zone_id     = ""

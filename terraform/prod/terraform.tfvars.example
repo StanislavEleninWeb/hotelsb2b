@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars and fill in. STUB — prod is not applied yet.
+aws_region  = "eu-west-1"
+environment = "prod"
+
+assets_bucket_name = "hotel-prod-assets-CHANGE-ME"
+
+# Prod should run with a real domain + certs.
+domain_name         = ""   # e.g. "hotel.example.com"
+acm_certificate_arn = ""   # us-east-1 cert for CloudFront
+alb_certificate_arn = ""   # regional cert for the ALB
+route53_zone_id     = ""
+
+# Sizing (override as needed)
+db_instance_class        = "db.r6g.large"
+db_allocated_storage     = 100
+redis_node_type          = "cache.r6g.large"
+redis_num_cache_clusters = 2
