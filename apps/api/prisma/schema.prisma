@@ -1,0 +1,685 @@
+// Hotel booking platform — Prisma schema (Phase 2).
+// Conventions (see ../../../CLAUDE.md invariants):
+//  - Money is ALWAYS an integer minor-unit amount (`*Minor`) + an ISO `currency`
+//    code. Never a float, never a bare "cents" field (minor exponent varies).
+//  - Every property-scoped entity carries `propertyId` (multi-property day one).
+//  - Statuses are enums so invalid states can't be represented.
+//  - AuditLog is append-only (no updatedAt, never mutated in place).
+//  - Payments hold only processor references (Stripe) — never raw card data.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─────────────────────────── Enums ───────────────────────────
+
+enum RoomStatus {
+  CLEAN
+  DIRTY
+  INSPECTED
+  OUT_OF_SERVICE
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentType {
+  FULL
+  DEPOSIT
+  PAY_AT_PROPERTY
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+  FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+// Cancellation policy of a rate plan.
+enum CancellationPolicy {
+  REFUNDABLE
+  NON_REFUNDABLE
+}
+
+// Channel that originated an action — used on Booking and AuditLog.
+enum Channel {
+  WEB
+  STAFF
+  AI_CHAT
+  AI_VOICE
+  AI_PHONE
+}
+
+enum StaffRole {
+  FRONT_DESK
+  MANAGER
+  FINANCE
+  HOUSEKEEPING
+  ADMIN // super admin — global, not property-scoped
+}
+
+enum AddOnUnit {
+  PER_STAY
+  PER_NIGHT
+  PER_PERSON
+}
+
+enum DiscountType {
+  PERCENT // discountValue = basis points (e.g. 1500 = 15%)
+  FIXED // discountValue = minor units in `currency`
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_MODIFIED
+  BOOKING_CANCELLED
+  CHECKIN_REMINDER
+  POST_STAY
+  PAYMENT_RECEIPT
+  REFUND_ISSUED
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+// ─────────────────────── Property & inventory ───────────────────────
+
+// The multi-property unit. Everything guest- or staff-facing is scoped to one.
+model Property {
+  id           String   @id @default(uuid()) @db.Uuid
+  slug         String   @unique
+  name         String
+  description  String?
+  timezone     String   @default("UTC")
+  currency     String   @default("EUR") @db.VarChar(3) // default pricing currency (ISO 4217)
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  region       String?
+  postalCode   String?
+  countryCode  String?  @db.VarChar(2)
+  latitude     Float?
+  longitude    Float?
+  checkInTime  String?  @default("15:00") // local HH:mm
+  checkOutTime String?  @default("11:00")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roomTypes     RoomType[]
+  rooms         Room[]
+  ratePlans     RatePlan[]
+  bookings      Booking[]
+  bookingRooms  BookingRoom[]
+  payments      Payment[]
+  notifications Notification[]
+  addOns        AddOn[]
+  promotions    Promotion[]
+  images        PropertyImage[]
+  amenities     PropertyAmenity[]
+  staffAccess   StaffPropertyAccess[]
+  roomBlocks    RoomBlock[]
+  reviews       Review[]
+  guestNotes    GuestNote[]
+
+  @@index([active])
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  url        String
+  alt        String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model Amenity {
+  id       String  @id @default(uuid()) @db.Uuid
+  code     String  @unique // e.g. "wifi", "parking", "pool", "wheelchair_access"
+  name     String
+  category String? // e.g. "accessibility", "general", "wellness"
+
+  properties PropertyAmenity[]
+  roomTypes  RoomTypeAmenity[]
+}
+
+model PropertyAmenity {
+  propertyId String @db.Uuid
+  amenityId  String @db.Uuid
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, amenityId])
+  @@index([amenityId])
+}
+
+// A sellable category of room (guest books a RoomType, not a physical Room).
+model RoomType {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  slug         String
+  name         String
+  description  String?
+  maxAdults    Int      @default(2)
+  maxChildren  Int      @default(0)
+  maxOccupancy Int      @default(2)
+  sizeSqm      Int?
+  bedConfig    String? // free-form, e.g. "1 king" / "2 twin"
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  property     Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  rooms        Room[]
+  ratePlans    RatePlan[]
+  bookingRooms BookingRoom[]
+  images       RoomTypeImage[]
+  amenities    RoomTypeAmenity[]
+
+  @@unique([propertyId, slug])
+  @@index([propertyId])
+}
+
+model RoomTypeImage {
+  id         String  @id @default(uuid()) @db.Uuid
+  roomTypeId String  @db.Uuid
+  url        String
+  alt        String?
+  sortOrder  Int     @default(0)
+
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@index([roomTypeId])
+}
+
+model RoomTypeAmenity {
+  roomTypeId String @db.Uuid
+  amenityId  String @db.Uuid
+
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([roomTypeId, amenityId])
+  @@index([amenityId])
+}
+
+// A physical, assignable room. Staff assigns one to a BookingRoom at/after booking.
+model Room {
+  id               String     @id @default(uuid()) @db.Uuid
+  propertyId       String     @db.Uuid
+  roomTypeId       String     @db.Uuid
+  number           String // door label, e.g. "204"
+  floor            Int?
+  status           RoomStatus @default(CLEAN)
+  housekeepingNote String?
+  active           Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  property     Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomType     RoomType      @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  bookingRooms BookingRoom[]
+  blocks       RoomBlock[]
+
+  @@unique([propertyId, number])
+  @@index([roomTypeId])
+  @@index([propertyId, status])
+}
+
+// Manual maintenance / owner-use / operational block on a physical room (ST-04).
+model RoomBlock {
+  id              String   @id @default(uuid()) @db.Uuid
+  propertyId      String   @db.Uuid
+  roomId          String   @db.Uuid
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+  reason          String
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room          Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  createdByUser User?    @relation("RoomBlockCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, startDate, endDate])
+  @@index([propertyId, startDate, endDate])
+}
+
+// ─────────────────────── Rate plans & pricing ───────────────────────
+
+model RatePlan {
+  id                 String             @id @default(uuid()) @db.Uuid
+  propertyId         String             @db.Uuid
+  roomTypeId         String             @db.Uuid
+  name               String
+  cancellationPolicy CancellationPolicy @default(REFUNDABLE)
+  refundableUntilHrs Int? // hours before check-in that free cancellation ends
+  includesBreakfast  Boolean            @default(false)
+  paymentType        PaymentType        @default(FULL)
+  depositPercent     Int? // basis points of total taken as deposit when DEPOSIT
+  minStayNights      Int                @default(1)
+  maxStayNights      Int?
+  basePriceMinor     Int // nightly base price, minor units
+  currency           String             @db.VarChar(3)
+  active             Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  property     Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomType     RoomType      @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  rules        RateRule[]
+  bookingRooms BookingRoom[]
+
+  @@index([propertyId])
+  @@index([roomTypeId])
+}
+
+// Seasonal / weekday / min-stay pricing override for a rate plan (ST-08).
+model RateRule {
+  id            String   @id @default(uuid()) @db.Uuid
+  ratePlanId    String   @db.Uuid
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
+  daysOfWeek    Int      @default(127) // bitmask Mon..Sun; convention: @hotel/shared DAY_OF_WEEK_BIT (127 = all days)
+  priceMinor    Int
+  minStayNights Int?
+  priority      Int      @default(0) // higher wins on overlap
+  createdAt     DateTime @default(now())
+
+  ratePlan RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+
+  @@index([ratePlanId, startDate, endDate])
+}
+
+model AddOn {
+  id         String    @id @default(uuid()) @db.Uuid
+  propertyId String    @db.Uuid
+  name       String
+  priceMinor Int
+  currency   String    @db.VarChar(3)
+  unit       AddOnUnit @default(PER_STAY)
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bookingAddOns BookingAddOn[]
+
+  @@index([propertyId])
+}
+
+// ─────────────────────── Guests & bookings ───────────────────────
+
+// A guest. May be an account holder (isAccount + passwordHash) or a one-off
+// guest identified only by contact details (BK-02: book as guest or with account).
+model Guest {
+  id             String   @id @default(uuid()) @db.Uuid
+  email          String?
+  phone          String?
+  firstName      String
+  lastName       String
+  isAccount      Boolean  @default(false)
+  passwordHash   String? // only for account holders; never a plaintext password
+  locale         String?
+  marketingOptIn Boolean  @default(false) // NT-04: separate from transactional
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  bookings Booking[]   @relation("PrimaryGuest")
+  notes    GuestNote[]
+  reviews  Review[]
+
+  // NOT unique: BK-02 allows repeat guest bookings with no account, so the same
+  // email recurs. Guest identity resolution (lookup-or-create, profile merge) is
+  // an application-layer decision — see MIGRATION-PLAN.md.
+  @@index([email])
+  @@index([phone])
+}
+
+// Internal staff note on a guest profile (ST-12), property-scoped for access.
+model GuestNote {
+  id           String   @id @default(uuid()) @db.Uuid
+  guestId      String   @db.Uuid
+  propertyId   String?  @db.Uuid
+  authorUserId String?  @db.Uuid
+  body         String
+  createdAt    DateTime @default(now())
+
+  guest      Guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  authorUser User?     @relation("GuestNoteAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([guestId])
+  @@index([propertyId])
+}
+
+// A reservation. checkIn/checkOut are the reservation envelope; per-room dates
+// live on BookingRoom (which is authoritative for availability and may stagger
+// within the envelope). All money is a single currency per booking: the service
+// layer MUST assert BookingRoom/BookingAddOn/Payment currency == Booking.currency.
+model Booking {
+  id               String        @id @default(uuid()) @db.Uuid
+  propertyId       String        @db.Uuid
+  confirmationCode String        @unique // MG-01 lookup key
+  status           BookingStatus @default(PENDING_PAYMENT)
+  channel          Channel       @default(WEB)
+  primaryGuestId   String        @db.Uuid
+
+  checkIn    DateTime @db.Date
+  checkOut   DateTime @db.Date
+  adults     Int      @default(1)
+  children   Int      @default(0)
+  roomsCount Int      @default(1)
+
+  currency        String @db.VarChar(3)
+  subtotalMinor   Int    @default(0)
+  discountMinor   Int    @default(0)
+  taxMinor        Int    @default(0)
+  totalMinor      Int    @default(0)
+  amountPaidMinor Int    @default(0)
+
+  promotionId     String?   @db.Uuid
+  specialRequests String?
+  createdByUserId String?   @db.Uuid // set when staff creates on behalf (ST-01)
+  cancelledAt     DateTime?
+  cancelReason    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  property      Property          @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  primaryGuest  Guest             @relation("PrimaryGuest", fields: [primaryGuestId], references: [id], onDelete: Restrict)
+  promotion     Promotion?        @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+  createdByUser User?             @relation("BookingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  rooms         BookingRoom[]
+  occupants     BookingOccupant[]
+  addOns        BookingAddOn[]
+  payments      Payment[]
+  refunds       Refund[]
+  notifications Notification[]
+  reviews       Review[]
+
+  @@index([propertyId, checkIn, checkOut]) // staff calendar + availability window
+  @@index([propertyId, status])
+  @@index([primaryGuestId])
+}
+
+// One room within a booking (BK-01 multi-room). roomId is the assigned physical
+// room (ST-05), nullable until staff assigns it.
+model BookingRoom {
+  id         String   @id @default(uuid()) @db.Uuid
+  bookingId  String   @db.Uuid
+  propertyId String   @db.Uuid
+  roomTypeId String   @db.Uuid
+  ratePlanId String   @db.Uuid
+  roomId     String?  @db.Uuid
+  checkIn    DateTime @db.Date
+  checkOut   DateTime @db.Date
+  adults     Int      @default(1)
+  children   Int      @default(0)
+  priceMinor Int // total price for this room across the stay
+  currency   String   @db.VarChar(3)
+
+  // propertyId & roomTypeId are denormalized copies of booking.propertyId and the
+  // booked room type — load-bearing for availability indexes. The service layer
+  // MUST keep them in sync with the parent booking and assert the assigned room's
+  // type matches roomTypeId (see MIGRATION-PLAN.md). currency MUST equal booking.currency.
+  booking   Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  property  Property          @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  roomType  RoomType          @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  ratePlan  RatePlan          @relation(fields: [ratePlanId], references: [id], onDelete: Restrict)
+  room      Room?             @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  occupants BookingOccupant[]
+
+  @@index([bookingId])
+  @@index([roomId, checkIn, checkOut]) // concurrency-safe availability (BK-07)
+  @@index([roomTypeId, checkIn, checkOut])
+  @@index([propertyId, checkIn, checkOut])
+}
+
+// Additional named occupant (BK-03). isPrimary marks the lead guest per room.
+model BookingOccupant {
+  id            String  @id @default(uuid()) @db.Uuid
+  bookingId     String  @db.Uuid
+  bookingRoomId String? @db.Uuid
+  firstName     String
+  lastName      String
+  isPrimary     Boolean @default(false)
+
+  booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  bookingRoom BookingRoom? @relation(fields: [bookingRoomId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([bookingRoomId])
+}
+
+model BookingAddOn {
+  id         String @id @default(uuid()) @db.Uuid
+  bookingId  String @db.Uuid
+  addOnId    String @db.Uuid
+  quantity   Int    @default(1)
+  priceMinor Int // captured unit price × qty at time of booking
+  currency   String @db.VarChar(3)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  addOn   AddOn   @relation(fields: [addOnId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId])
+}
+
+// ─────────────────────── Payments & refunds ───────────────────────
+
+// PB-05: only processor references are stored — never raw card data. `provider`
+// defaults to Stripe (the chosen processor).
+model Payment {
+  id                    String        @id @default(uuid()) @db.Uuid
+  bookingId             String        @db.Uuid
+  propertyId            String        @db.Uuid
+  provider              String        @default("stripe")
+  stripePaymentIntentId String?       @unique
+  stripeChargeId        String?
+  type                  PaymentType   @default(FULL)
+  status                PaymentStatus @default(PENDING)
+  amountMinor           Int
+  currency              String        @db.VarChar(3)
+  capturedAt            DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  refunds  Refund[]
+
+  @@index([bookingId])
+  @@index([propertyId])
+  @@index([status])
+}
+
+model Refund {
+  id              String       @id @default(uuid()) @db.Uuid
+  paymentId       String       @db.Uuid
+  bookingId       String       @db.Uuid
+  stripeRefundId  String?      @unique
+  amountMinor     Int
+  currency        String       @db.VarChar(3)
+  reason          String?
+  status          RefundStatus @default(PENDING)
+  createdByUserId String?      @db.Uuid
+  createdAt       DateTime     @default(now())
+
+  payment       Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  booking       Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  createdByUser User?   @relation("RefundCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId])
+  @@index([bookingId])
+}
+
+// ─────────────────────── Promotions ───────────────────────
+
+model Promotion {
+  id               String       @id @default(uuid()) @db.Uuid
+  propertyId       String?      @db.Uuid // null = applies to all properties
+  code             String       @unique
+  description      String?
+  discountType     DiscountType
+  discountValue    Int // PERCENT: basis points; FIXED: minor units in `currency`
+  currency         String?      @db.VarChar(3)
+  maxRedemptions   Int?
+  redemptionsCount Int          @default(0)
+  minNights        Int?
+  validFrom        DateTime?
+  validUntil       DateTime?
+  active           Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([propertyId])
+}
+
+// ─────────────────────── Notifications ───────────────────────
+
+model Notification {
+  id         String              @id @default(uuid()) @db.Uuid
+  bookingId  String?             @db.Uuid
+  propertyId String?             @db.Uuid
+  type       NotificationType
+  channel    NotificationChannel
+  status     NotificationStatus  @default(PENDING)
+  toAddress  String?
+  payload    Json?
+  sentAt     DateTime?
+  error      String?
+  createdAt  DateTime            @default(now())
+
+  booking  Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([status])
+  @@index([propertyId])
+}
+
+// ─────────────────────── Reviews (SD-07) ───────────────────────
+
+model Review {
+  id         String       @id @default(uuid()) @db.Uuid
+  propertyId String       @db.Uuid
+  bookingId  String?      @db.Uuid
+  guestId    String?      @db.Uuid
+  rating     Int // 1..5, enforced in application layer
+  title      String?
+  body       String?
+  status     ReviewStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  booking  Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  guest    Guest?   @relation(fields: [guestId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status])
+}
+
+// ─────────────────────── Staff, access & audit ───────────────────────
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         StaffRole @default(FRONT_DESK)
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  propertyAccess    StaffPropertyAccess[]
+  auditLogs         AuditLog[]            @relation("AuditActor")
+  createdBookings   Booking[]             @relation("BookingCreatedBy")
+  createdRoomBlocks RoomBlock[]           @relation("RoomBlockCreatedBy")
+  createdRefunds    Refund[]              @relation("RefundCreatedBy")
+  guestNotes        GuestNote[]           @relation("GuestNoteAuthor")
+}
+
+// Property-scoped access for a staff user (§5.6). ADMIN role bypasses scoping in
+// the application layer; all other roles must have a row here per property.
+model StaffPropertyAccess {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @db.Uuid
+  propertyId String     @db.Uuid
+  role       StaffRole? // optional per-property role override
+  createdAt  DateTime   @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([propertyId])
+}
+
+// Append-only audit trail (ST-17, §5.10). Never updated in place — no updatedAt.
+// One of actorUserId / actorGuestId identifies who; channel records from where.
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  propertyId    String?  @db.Uuid
+  entityType    String // e.g. "Booking", "Payment", "Room"
+  entityId      String
+  action        String // e.g. "create", "cancel", "check_in", "price_override"
+  channel       Channel
+  actorUserId   String?  @db.Uuid
+  actorGuestId  String?  @db.Uuid
+  before        Json?
+  after         Json?
+  diff          Json?
+  ipAddress     String?
+  correlationId String?
+  createdAt     DateTime @default(now())
+
+  actorUser User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([propertyId, createdAt])
+  @@index([actorUserId])
+}

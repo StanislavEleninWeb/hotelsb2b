@@ -7,6 +7,9 @@ packages:
 #   sharp          — Next.js image optimization
 #   unrs-resolver  — ESLint import resolver native binding
 allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
   esbuild: true
+  prisma: true
   sharp: true
   unrs-resolver: true

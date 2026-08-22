@@ -15,7 +15,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 |---|---|---|---|
 | 0 | Monorepo scaffold | 🟡 gate GREEN | pending review/commit |
 | 1 | Terraform base infra | 🟡 gate GREEN | pending review/commit |
-| 2 | Database schema (Prisma) | 🟢 unblocked (Stripe + multi-property set) | — |
+| 2 | Database schema (Prisma) | 🟡 gate GREEN | pending review/commit |
 | 3 | NestJS booking API core | ⬜ | — |
 | 4 | Auth & access control | ⬜ | — |
 | 5 | Public web app | ⬜ | — |
@@ -101,18 +101,44 @@ this phase.
 
 ---
 
-## Phase 2 — Database Schema (Prisma)  ⛔
+## Phase 2 — Database Schema (Prisma)  🟡 gate GREEN
 
-**Blocked on the scope decisions above.**
+**Provides the data model that later phases build on** (schema only — behavior is
+Phases 3+). Data model present for: `SD-01..04` (search/filter/detail — property,
+roomType, amenity, rateplan, review), `BK-01..08` (booking, multi-room, occupants,
+add-ons, promo, payment types), `MG-01..04` (confirmation-code lookup, status,
+cancel), `ST-01..05`/`ST-08..13`/`ST-16..17` (staff bookings, room block/assign,
+housekeeping status, rate plans, RBAC, **append-only audit**), `PB-01..05`
+(Stripe payment refs, refunds, no card data), `NT-01..04` (notifications + opt-in),
+`AD-01..03` (CMS content, users/roles, rate calendar).
 
-**Satisfies (data model for):** `SD-01..04`, `BK-01..08`, `MG-01..04`,
-`ST-01..17`, `PB-01..05`, `NT-01..04`, `AD-01..03`, `RP-01..03`.
+**Explicitly NOT covered by this schema (deferred — see MIGRATION-PLAN.md):**
+`AI-03`/auth tokens & OTP (Phase 4), `ST-06`/`MG-07` check-in record + ID-doc,
+`ST-14` waitlist/overbooking, `AI-07` call transcripts (Phase 8), `ST-19` OTA sync,
+`AD-04`/`SD-06` full i18n. The tracker no longer claims these.
 
-**Gate:** `prisma validate` + `prisma migrate diff` clean; money fields are
-integer minor units (`amountMinor`+`currency`) — no floats; status enums modeled;
-indexes for search-by-property+dates, booking-by-confirmation-code, staff-calendar
-by property+date range; `propertyId` on every scoped entity; migration plan doc
-listing v1 vs. deferred (M/S/C).
+**Gate — all pass:**
+
+- [x] `prisma validate` → schema valid; `prisma format` clean.
+- [x] 27 tables, 46 FKs; **every** relation two-sided (fixed 4 dangling UUID columns).
+- [x] Money = integer minor units (`amountMinor`/`*Minor`) + ISO `currency`; **no floats**; `VarChar(3)` (not blank-padded `Char`).
+- [x] Status enums for room/booking/payment/refund/notification/review.
+- [x] Indexes: `Booking(confirmationCode)` unique; `Booking(propertyId, checkIn, checkOut)` (staff calendar + availability); `BookingRoom(roomId, checkIn, checkOut)` (concurrency); `RoomType`/`RatePlan` by property.
+- [x] `propertyId` on every scoped entity — **with FK** (Payment/Notification/BookingRoom scope columns wired, not raw UUIDs).
+- [x] CHECK constraints in the migration: `rating ∈ [1,5]`, non-negative money, `checkOut > checkIn` — **verified** (DB rejected rating=9).
+- [x] Migration created, **applied to Postgres** end-to-end; Prisma Client generated and **resolves from the NestJS (CJS) app**.
+- [x] `MIGRATION-PLAN.md` lists v1 vs deferred + the 6 app-layer invariants the schema can't enforce (guest identity, single-currency, denorm sync, promo concurrency).
+
+**Verification evidence (2026-08-22):**
+- `prisma validate` → "The schema at prisma/schema.prisma is valid".
+- `prisma migrate dev` → migration `*_init` applied; "database is now in sync".
+- Postgres: 27 base tables, 11 custom CHECK constraints; `INSERT rating=9` → rejected by `Review_rating_range`.
+- `require('@prisma/client')` from `apps/api` → PrismaClient + `Prisma.ModelName.Booking/AuditLog` resolve.
+- `pnpm -r typecheck` / `pnpm -r lint` → clean.
+
+**Reviewed by advisor:** fixed 4 blocking model defects (non-unique guest email,
+dangling `bookingRoomId`, unrelated `Payment`/`Notification.propertyId`), plus
+Char→VarChar, day-of-week bitmask moved to `@hotel/shared`, and rating/money CHECKs.
 
 ---
 

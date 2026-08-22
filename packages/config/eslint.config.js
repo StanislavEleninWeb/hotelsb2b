@@ -11,6 +11,7 @@ export const baseConfig = [
       "**/dist/**",
       "**/build/**",
       "**/.next/**",
+      "**/next-env.d.ts", // Next-generated; contains triple-slash refs by design
       "**/node_modules/**",
       "**/*.config.js",
       "**/*.config.mjs",
