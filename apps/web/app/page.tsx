@@ -1,17 +1,41 @@
-import { HealthResponseSchema } from "@hotel/shared";
+import Link from "next/link";
+import { serverGet } from "../lib/api";
+import type { PropertySummary } from "../lib/types";
+import { SearchForm } from "./_components/search-form";
 
-// Phase 0 placeholder. Proves @hotel/shared (ESM build) imports into Next.js.
-export default function Home() {
-  const health = HealthResponseSchema.parse({
-    status: "ok",
-    service: "web",
-    timestamp: new Date().toISOString(),
-  });
+// SSR — property list is server-rendered for SEO (SD-08).
+export default async function Home() {
+  let properties: PropertySummary[] = [];
+  let error: string | null = null;
+  try {
+    properties = await serverGet<PropertySummary[]>("/properties");
+  } catch {
+    error = "Could not load properties. Is the API running?";
+  }
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: "2rem" }}>
-      <h1>Hotel Booking — Guest Web</h1>
-      <p>Scaffold OK. Shared schema resolves: {health.service} / {health.status}</p>
-    </main>
+    <>
+      <h1>Find your stay</h1>
+      <div className="card">
+        <SearchForm />
+      </div>
+
+      <h2>Our properties</h2>
+      {error && <p className="error">{error}</p>}
+      <div className="grid">
+        {properties.map((p) => (
+          <div className="card" key={p.id}>
+            <h2 style={{ marginTop: 0 }}>
+              <Link href={`/property/${p.slug}`}>{p.name}</Link>
+            </h2>
+            {p.city && <p className="muted">{p.city}</p>}
+            {p.description && <p>{p.description}</p>}
+            <Link className="btn" href={`/property/${p.slug}`}>
+              View & book
+            </Link>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

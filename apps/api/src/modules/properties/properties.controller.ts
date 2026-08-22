@@ -25,6 +25,12 @@ export class PropertiesController {
     return this.properties.findPublished();
   }
 
+  // SEO route — indexable by slug (SD-08). Declared before :id so it isn't shadowed.
+  @Get('by-slug/:slug')
+  getBySlug(@Param('slug') slug: string) {
+    return this.properties.findPublishedBySlug(slug);
+  }
+
   @Get(':id')
   get(@Param('id', ParseUUIDPipe) id: string): Promise<Property> {
     return this.properties.findPublishedOne(id);

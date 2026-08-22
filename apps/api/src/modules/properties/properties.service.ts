@@ -18,6 +18,26 @@ export class PropertiesService {
     return property;
   }
 
+  // SEO-friendly lookup by slug (SD-08), with the content a property page renders.
+  async findPublishedBySlug(slug: string) {
+    const property = await this.prisma.property.findFirst({
+      where: { slug, active: true },
+      include: {
+        images: { orderBy: { sortOrder: 'asc' } },
+        amenities: { include: { amenity: true } },
+        roomTypes: {
+          where: { active: true },
+          include: {
+            images: { orderBy: { sortOrder: 'asc' } },
+            ratePlans: { where: { active: true }, orderBy: { basePriceMinor: 'asc' } },
+          },
+        },
+      },
+    });
+    if (!property) throw new NotFoundException('Property not found');
+    return property;
+  }
+
   create(dto: CreatePropertyDto): Promise<Property> {
     return this.prisma.property.create({ data: { ...dto, currency: dto.currency.toUpperCase() } });
   }
