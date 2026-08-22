@@ -18,7 +18,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | 2 | Database schema (Prisma) | 🟡 gate GREEN | pending review/commit |
 | 3 | NestJS booking API core | 🟡 gate GREEN (PR open) | on feat/phase-3-booking-api |
 | 4 | Auth & access control | 🟡 gate GREEN (PR open) | on feat/phase-4-auth |
-| 5 | Public web app | ⬜ | — |
+| 5 | Public web app | 🟡 gate GREEN (PR open) | on feat/phase-5-web |
 | 6 | Internal staff panel | ⬜ | — |
 | 7 | Search & caching layer | ⬜ | — |
 | 8 | AI assistant integration | ⬜ | — |
@@ -203,14 +203,41 @@ scoping on create endpoints (id-param routes are scoped now).
 
 ---
 
-## Phase 5 — Public Web App  ⬜
+## Phase 5 — Public Web App  🟡 gate GREEN  _(branch: feat/phase-5-web, PR open)_
 
-**Satisfies:** `SD-01..08`, `BK-01..08`, `MG-01..06`, `NF-02`, `NF-05`, §5.2.
+**Satisfies:** `SD-01`/`SD-03`/`SD-04`/`SD-08` (search UI, property detail, live
+availability/pricing, SEO by-slug), `BK-01..08` (booking flow), `MG-01`/`MG-02`/`MG-04`
+(account, view, cancel-with-policy), `NF-02` (mobile-responsive), §5.2.
 
-**Gate:** SSR search + property pages (SEO/ISR); booking flow with hosted payment
-fields (provider stubbed behind interface); account + cancel-with-policy; CSP +
-security headers in middleware; TanStack Query against API using shared Zod;
-all guest text sanitized before render (no raw `dangerouslySetInnerHTML`).
+**Deferred (recorded, not silently faked):** `SD-02` filters + destination/keyword
+search → **Phase 7** (Postgres FTS `SearchService`); search UI runs over
+`/properties` + per-property availability, filtering by name/city client-side.
+`SD-05` rate-plan compare, `SD-06` i18n, `SD-07` reviews UI → later.
+
+**API additions this phase (prereqs for the web client):** CORS (credentials +
+custom headers), `GET /properties/by-slug/:slug`, room-type discovery in that
+response, `GET /bookings/mine`, policy fields in the booking include, and
+`GET /bookings/:id/cancellation-preview` (refund logic in the API — invariant #6).
+
+**Gate — all pass:**
+
+- [x] SSR search + property detail with SEO metadata (by-slug, canonical) — **verified rendering seed content**.
+- [x] Booking flow (room/rate → guest details → payment → confirmation) — **driven end-to-end in a real browser**; created booking `WQE6PYKW` (PENDING_PAYMENT, €180) persisted.
+- [x] Payment stubbed behind a `PaymentProvider` interface — **no card fields in our forms** (PB-05); swappable for Stripe in Phase 8.
+- [x] Confirmation says **"awaiting payment confirmation"**, never "confirmed" (invariant #8).
+- [x] Account: login/register, my bookings, **cancel-with-policy** (shows API-computed refund before confirming).
+- [x] **CSP + security headers** in middleware — nonce + `strict-dynamic` (no `unsafe-inline` for scripts; `unsafe-eval` dev-only for HMR), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` — **verified via curl and a live CSP violation caught eval**.
+- [x] TanStack Query against the API; forms validate with **shared Zod** (`CreateBookingSchema`, `LoginSchema`) matching the API DTOs.
+- [x] Guest text rendered via React escaping; **no `dangerouslySetInnerHTML`** (no DOM sanitizer forced into `@hotel/shared`).
+- [x] Durable `prisma/seed.mjs` (2 properties, room types, rooms, rate plans, amenities, staff + guest accounts) — reused by Phases 6/7/9.
+
+**Verification evidence (2026-08-22):**
+- `next build` → 8 routes compile; `pnpm -r typecheck` / `pnpm -r lint` clean; API tests still 12/12.
+- Browser: search → property (`grand-harbor`) → book → confirmation `WQE6PYKW`; DB row confirms `PENDING_PAYMENT / 18000 / EUR`.
+- `curl` CSP header shows nonce + strict-dynamic + connect-src to the API origin.
+
+**Follow-ups (documented):** per-route ISR deferred (nonce CSP forces dynamic —
+SSR still crawlable); dev-refresh transient remount on `/book` (fresh loads fine).
 
 ---
 

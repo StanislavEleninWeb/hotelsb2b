@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -15,6 +16,8 @@ import { Audit } from '../../common/audit/audit.decorator';
 import { AuditLogInterceptor } from '../../common/audit/audit-log.interceptor';
 import { Roles } from '../../common/auth/roles.decorator';
 import { PropertyScope } from '../../auth/guards/property-scope.guard';
+import { CurrentUser, JwtAuthGuard } from '../../auth/decorators';
+import type { AuthUser } from '../../auth/auth-user';
 import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -50,6 +53,14 @@ export class BookingsController {
     return this.bookings.lookup(dto.confirmationCode, dto.lastName);
   }
 
+  // A logged-in guest's own bookings (MG-02). Declared before :id so it isn't
+  // captured as an id param.
+  @Get('mine')
+  @UseGuards(JwtAuthGuard)
+  mine(@CurrentUser() user: AuthUser): Promise<Booking[]> {
+    return user.kind === 'guest' ? this.bookings.listForGuest(user.id) : Promise.resolve([]);
+  }
+
   // Object-level authorization (BOLA, §5.6): the owning guest OR staff scoped to
   // the booking's property. PropertyScopeGuard 401s anonymous, 403s out-of-scope
   // staff, 404s a guest asking for someone else's booking.
@@ -57,6 +68,13 @@ export class BookingsController {
   @PropertyScope('booking', 'id')
   get(@Param('id', ParseUUIDPipe) id: string): Promise<Booking> {
     return this.bookings.findByIdOrThrow(id);
+  }
+
+  // Refund/policy preview before confirming a cancellation (MG-04).
+  @Get(':id/cancellation-preview')
+  @PropertyScope('booking', 'id')
+  cancellationPreview(@Param('id', ParseUUIDPipe) id: string) {
+    return this.bookings.cancellationPreview(id);
   }
 
   // Cancel — owning guest or property-scoped staff (same BOLA rule).

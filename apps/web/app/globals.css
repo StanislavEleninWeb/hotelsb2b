@@ -1,0 +1,52 @@
+:root {
+  --fg: #1a1a2e;
+  --muted: #6b7280;
+  --bg: #f7f7fb;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --danger: #b91c1c;
+  --ok: #047857;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.container { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+.nav { background: var(--card); border-bottom: 1px solid var(--border); }
+.nav .container { display: flex; gap: 1rem; align-items: center; padding: 1rem 1.5rem; }
+.nav .brand { font-weight: 700; font-size: 1.1rem; }
+.nav .spacer { flex: 1; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+.row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; }
+label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+input, select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: #fff; }
+.field { flex: 1; min-width: 120px; }
+button, .btn {
+  display: inline-block; padding: 0.55rem 1rem; border: 1px solid var(--accent);
+  background: var(--accent); color: var(--accent-fg); border-radius: 8px; font: inherit;
+  cursor: pointer; text-align: center;
+}
+button.secondary, .btn.secondary { background: #fff; color: var(--accent); }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+.muted { color: var(--muted); }
+.price { font-weight: 700; font-size: 1.1rem; }
+.badge { font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 999px; border: 1px solid var(--border); }
+.badge.refundable { color: var(--ok); border-color: var(--ok); }
+.badge.nonref { color: var(--danger); border-color: var(--danger); }
+.error { color: var(--danger); }
+.ok { color: var(--ok); }
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.2rem; }
+ul.clean { list-style: none; padding: 0; margin: 0.5rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.steps { display: flex; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; }
+.steps .step { padding: 0.25rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+.steps .step.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }

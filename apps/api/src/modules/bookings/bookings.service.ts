@@ -159,13 +159,76 @@ export class BookingsService {
     throw new Error('Could not allocate a unique confirmation code');
   }
 
+  /** MG-02: a logged-in guest's own bookings. */
+  listForGuest(guestId: string): Promise<Booking[]> {
+    return this.prisma.booking.findMany({
+      where: { primaryGuestId: guestId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        property: { select: { name: true } },
+        rooms: { include: { roomType: { select: { name: true } } } },
+      },
+    });
+  }
+
   async findByIdOrThrow(id: string): Promise<Booking> {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: { rooms: true, payments: true, occupants: true },
+      include: {
+        occupants: true,
+        payments: true,
+        property: { select: { name: true, checkInTime: true, checkOutTime: true } },
+        rooms: {
+          include: {
+            roomType: { select: { name: true } },
+            ratePlan: {
+              select: { name: true, cancellationPolicy: true, refundableUntilHrs: true },
+            },
+          },
+        },
+      },
     });
     if (!booking) throw new NotFoundException('Booking not found');
     return booking;
+  }
+
+  /**
+   * MG-04: show the refund before confirming a cancellation. Refund logic lives
+   * here (the API), not the web app, so the AI assistant reuses it (invariant #6).
+   */
+  async cancellationPreview(id: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: { rooms: { include: { ratePlan: true } } },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const now = Date.now();
+    let refundableMinor = 0;
+    const rooms = booking.rooms.map((r) => {
+      const rp = r.ratePlan;
+      let refundable = rp.cancellationPolicy === 'REFUNDABLE';
+      if (refundable && rp.refundableUntilHrs != null) {
+        const deadline = r.checkIn.getTime() - rp.refundableUntilHrs * 3_600_000;
+        if (now > deadline) refundable = false;
+      }
+      const amount = refundable ? r.priceMinor : 0;
+      refundableMinor += amount;
+      return {
+        bookingRoomId: r.id,
+        policy: rp.cancellationPolicy,
+        priceMinor: r.priceMinor,
+        refundableMinor: amount,
+      };
+    });
+
+    return {
+      currency: booking.currency,
+      totalMinor: booking.totalMinor,
+      refundableMinor,
+      nonRefundableMinor: booking.totalMinor - refundableMinor,
+      rooms,
+    };
   }
 
   /** MG-01: confirmation code + last-name lookup (no account). */

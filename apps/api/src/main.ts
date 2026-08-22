@@ -14,6 +14,27 @@ async function bootstrap() {
   // Parse cookies for cookie-based web sessions (auth + CSRF).
   app.use(cookieParser());
 
+  // CORS for the browser clients (web :3000, staff :3001). credentials:true is
+  // incompatible with a wildcard origin, so use an explicit allow-list, and
+  // allow-list our custom request headers or the preflight strips them.
+  const origins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://localhost:3001')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  app.enableCors({
+    origin: origins,
+    credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-CSRF-Token',
+      'Idempotency-Key',
+      'X-Channel',
+      'X-Request-Id',
+    ],
+    exposedHeaders: ['X-Request-Id'],
+  });
+
   // API-first: every client hits the one versioned API. See CLAUDE.md invariant #7.
   app.setGlobalPrefix('api/v1');
 
