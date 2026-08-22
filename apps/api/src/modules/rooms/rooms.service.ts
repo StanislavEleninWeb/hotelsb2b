@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { BookingStatus, Room, RoomBlock } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../cache/cache.service';
 import { CreateRoomDto, UpdateRoomDto } from './dto/room.dto';
 
 const ACTIVE_STATUSES: BookingStatus[] = [
@@ -11,7 +12,10 @@ const ACTIVE_STATUSES: BookingStatus[] = [
 
 @Injectable()
 export class RoomsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   listByProperty(propertyId: string): Promise<Room[]> {
     return this.prisma.room.findMany({
@@ -21,14 +25,19 @@ export class RoomsService {
     });
   }
 
-  create(dto: CreateRoomDto): Promise<Room> {
-    return this.prisma.room.create({ data: dto });
+  async create(dto: CreateRoomDto): Promise<Room> {
+    const room = await this.prisma.room.create({ data: dto });
+    await this.cache.bumpProperty(dto.propertyId); // new inventory affects availability
+    return room;
   }
 
   async update(id: string, dto: UpdateRoomDto): Promise<Room> {
     const room = await this.prisma.room.findUnique({ where: { id } });
     if (!room) throw new NotFoundException('Room not found');
-    return this.prisma.room.update({ where: { id }, data: dto });
+    const updated = await this.prisma.room.update({ where: { id }, data: dto });
+    // status (OUT_OF_SERVICE) / active changes affect availability.
+    await this.cache.bumpProperty(room.propertyId);
+    return updated;
   }
 
   listBlocks(propertyId: string): Promise<RoomBlock[]> {
@@ -59,7 +68,7 @@ export class RoomsService {
     });
     if (clash) throw new ConflictException('An active booking overlaps this block window');
 
-    return this.prisma.roomBlock.create({
+    const block = await this.prisma.roomBlock.create({
       data: {
         propertyId: room.propertyId,
         roomId,
@@ -69,5 +78,7 @@ export class RoomsService {
         createdByUserId: input.userId ?? null,
       },
     });
+    await this.cache.bumpProperty(room.propertyId); // a block removes availability
+    return block;
   }
 }

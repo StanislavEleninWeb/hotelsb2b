@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Booking, BookingRoom, BookingStatus, Prisma } from '@prisma/client';
+import { Booking, BookingRoom, BookingStatus, NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AvailabilityService } from '../availability/availability.service';
+import { CacheService } from '../../cache/cache.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ActionContext } from '../../common/action-context';
 import { generateConfirmationCode } from '../../common/confirmation-code';
 import { assertTransition } from './booking-state-machine';
@@ -19,6 +21,8 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly availability: AvailabilityService,
+    private readonly cache: CacheService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private toDate(iso: string): Date {
@@ -138,6 +142,8 @@ export class BookingsService {
       return this.insertWithUniqueCode(tx, baseData);
     });
 
+    // A new booking consumes inventory — invalidate that property's availability cache.
+    await this.cache.bumpProperty(dto.propertyId);
     return created;
   }
 
@@ -349,17 +355,44 @@ export class BookingsService {
    * The acting user/channel is captured by the AuditLogInterceptor from the request.
    */
   async transition(id: string, to: BookingStatus, reason?: string): Promise<Booking> {
-    const booking = await this.findByIdOrThrow(id);
-    assertTransition(booking.status, to);
-    return this.prisma.booking.update({
+    const current = await this.prisma.booking.findUnique({
       where: { id },
-      data: {
-        status: to,
-        ...(to === BookingStatus.CANCELLED
-          ? { cancelledAt: new Date(), cancelReason: reason ?? null }
-          : {}),
-      },
+      select: { id: true, status: true, propertyId: true, primaryGuest: { select: { email: true } } },
     });
+    if (!current) throw new NotFoundException('Booking not found');
+    assertTransition(current.status, to);
+
+    const notificationIds: string[] = [];
+    // Write the Notification row IN the transaction (source of truth); enqueue after.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.update({
+        where: { id },
+        data: {
+          status: to,
+          ...(to === BookingStatus.CANCELLED
+            ? { cancelledAt: new Date(), cancelReason: reason ?? null }
+            : {}),
+        },
+      });
+      const type =
+        to === BookingStatus.CONFIRMED
+          ? NotificationType.BOOKING_CONFIRMED
+          : to === BookingStatus.CANCELLED
+            ? NotificationType.BOOKING_CANCELLED
+            : null;
+      if (type) {
+        const n = await this.notifications.createForBooking(tx, booking, type, current.primaryGuest.email);
+        notificationIds.push(n.id);
+      }
+      return booking;
+    });
+
+    for (const nid of notificationIds) await this.notifications.enqueue(nid);
+    // Cancel / no-show free inventory → invalidate the property's availability cache.
+    if (to === BookingStatus.CANCELLED || to === BookingStatus.NO_SHOW) {
+      await this.cache.bumpProperty(current.propertyId);
+    }
+    return updated;
   }
 
   async cancel(id: string, reason?: string): Promise<Booking> {

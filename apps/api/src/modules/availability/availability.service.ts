@@ -2,6 +2,9 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ruleAppliesOn } from '@hotel/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../cache/cache.service';
+
+const AVAILABILITY_TTL_SECONDS = 120;
 
 export interface AvailabilityQuery {
   propertyId: string;
@@ -31,7 +34,10 @@ export interface RoomTypeAvailability {
  */
 @Injectable()
 export class AvailabilityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   private nights(checkIn: Date, checkOut: Date): Date[] {
     const out: Date[] = [];
@@ -70,8 +76,27 @@ export class AvailabilityService {
     return total;
   }
 
-  /** Read-only availability for search/detail (SD-01, SD-04). No locks. */
+  /**
+   * Read-only availability for search/detail (SD-01, SD-04). No locks. Cached in
+   * Redis, keyed by the property's version so any inventory/pricing write
+   * (via CacheService.bumpProperty) makes stale keys unreachable.
+   */
   async search(query: AvailabilityQuery): Promise<RoomTypeAvailability[]> {
+    const { propertyId, checkIn, checkOut, adults, children } = query;
+
+    const version = await this.cache.propertyVersion(propertyId);
+    const key = `avail:${propertyId}:v${version}:${checkIn.toISOString().slice(0, 10)}:${checkOut
+      .toISOString()
+      .slice(0, 10)}:${adults}:${children}`;
+    const cached = await this.cache.getJson<RoomTypeAvailability[]>(key);
+    if (cached) return cached;
+
+    const result = await this.computeAvailability(query);
+    await this.cache.setJson(key, result, AVAILABILITY_TTL_SECONDS);
+    return result;
+  }
+
+  private async computeAvailability(query: AvailabilityQuery): Promise<RoomTypeAvailability[]> {
     const { propertyId, checkIn, checkOut, adults, children } = query;
 
     const roomTypes = await this.prisma.roomType.findMany({
