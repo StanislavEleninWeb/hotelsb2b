@@ -64,6 +64,7 @@ export class BookingsService {
     // Interactive transaction: reserve a physical room per requested room (locking),
     // price it, then write the booking. If any room can't be reserved the whole
     // transaction rolls back — no partial bookings, no double-books (BK-07).
+    const notificationIds: string[] = [];
     const created = await this.prisma.$transaction(async (tx) => {
       // Guest identity resolution (MIGRATION-PLAN invariant #1, hardened per review):
       // link to an existing guest ONLY when the requester is authenticated as that
@@ -139,9 +140,19 @@ export class BookingsService {
         },
       };
 
-      return this.insertWithUniqueCode(tx, baseData);
+      const booking = await this.insertWithUniqueCode(tx, baseData);
+      // AI-06 / BK-08: acknowledge receipt (awaiting payment). Row written in-tx.
+      const n = await this.notifications.createForBooking(
+        tx,
+        booking,
+        NotificationType.BOOKING_RECEIVED,
+        guest.email,
+      );
+      notificationIds.push(n.id);
+      return booking;
     });
 
+    for (const nid of notificationIds) await this.notifications.enqueue(nid);
     // A new booking consumes inventory — invalidate that property's availability cache.
     await this.cache.bumpProperty(dto.propertyId);
     return created;

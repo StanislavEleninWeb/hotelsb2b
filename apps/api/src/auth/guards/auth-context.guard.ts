@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthUser } from '../auth-user';
 import { TokenService } from '../token.service';
@@ -19,6 +19,12 @@ export class AuthContextGuard implements CanActivate {
     if (!token) return true;
 
     const payload = this.tokens.verifyAccessToken(token); // throws 401 if invalid
+    // Only real access tokens establish a subject. Reject anything else (e.g. a
+    // booking-action verification token) rather than defaulting it to a guest.
+    if (payload.kind !== 'staff' && payload.kind !== 'guest') {
+      throw new UnauthorizedException('Not an access token');
+    }
+    if (!payload.sub) throw new UnauthorizedException('Malformed access token');
     req.user =
       payload.kind === 'staff'
         ? { kind: 'staff', id: payload.sub, email: payload.email ?? '', role: payload.role! }

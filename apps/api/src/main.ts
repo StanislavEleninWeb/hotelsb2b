@@ -6,7 +6,9 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: true preserves the exact request bytes so inbound webhook signatures
+  // (AI provider, payment processor) can be HMAC-verified over what was actually sent.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
 
   // Structured logging (pino) with per-request correlation ids.
   app.useLogger(app.get(Logger));

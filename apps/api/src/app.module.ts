@@ -12,6 +12,7 @@ import { RedisModule } from './redis/redis.module';
 import { CacheModule } from './cache/cache.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SearchModule } from './modules/search/search.module';
+import { AiModule } from './modules/ai/ai.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { RolesGuard } from './common/auth/roles.guard';
 import { AuthModule } from './auth/auth.module';
@@ -52,13 +53,12 @@ import { GuestsModule } from './modules/guests/guests.module';
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        // 'default' = general traffic; 'ai' = tighter bucket for the AI assistant's
-        // tool-invocation endpoints (Phase 8) so a runaway agent can't hammer the
-        // booking engine independently of general API traffic (§5.5).
-        throttlers: [
-          { name: 'default', ttl: 60_000, limit: 100 },
-          { name: 'ai', ttl: 60_000, limit: 30 },
-        ],
+        // Single per-IP bucket; routes tighten it with @Throttle (search 20/min,
+        // AI tool endpoints 30/min). A named global 'ai' throttler would apply to
+        // ALL routes, so AI tightening is done per-route instead. NOTE: per-IP is a
+        // weak backstop for AI (all traffic shares the provider's IP) — the real
+        // limit is per-booking (AiService OTP counter, §5.5).
+        throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
         storage: new ThrottlerStorageRedisService(
           new Redis(config.get<string>('REDIS_URL') ?? 'redis://localhost:6379', {
             maxRetriesPerRequest: null,
@@ -92,6 +92,7 @@ import { GuestsModule } from './modules/guests/guests.module';
     GuestsModule,
     NotificationsModule,
     SearchModule,
+    AiModule,
   ],
   controllers: [AppController],
   // Global guard order matters and runs top-to-bottom:

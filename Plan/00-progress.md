@@ -21,7 +21,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | 5 | Public web app | 🟡 gate GREEN (PR open) | on feat/phase-5-web |
 | 6 | Internal staff panel | 🟡 gate GREEN (PR open) | on feat/phase-6-staff |
 | 7 | Search & caching layer | 🟡 gate GREEN (PR open) | on feat/phase-7-search-cache |
-| 8 | AI assistant integration | ⬜ | — |
+| 8 | AI assistant integration | 🟡 gate GREEN (PR open) | on feat/phase-8-ai |
 | 9 | Mobile app (Expo) | ⬜ | — |
 | 10 | CI/CD pipeline | ⬜ | — |
 | 11 | Security hardening pass | ⬜ | — |
@@ -306,14 +306,42 @@ build clean. Live checks: FTS queries, cache version bump, notification SENT.
 
 ---
 
-## Phase 8 — AI Assistant Integration  ⬜
+## Phase 8 — AI Assistant Integration  🟡 gate GREEN  _(branch: feat/phase-8-ai, PR open)_
 
-**Satisfies:** `BK-09..12`, `MG-08`, `AI-01..08`, §4, §5.4.
+**Satisfies (the signed API boundary + flows):** `BK-09` (complete a booking via
+the assistant), `BK-12` (confirm refund/details before finalizing — cancellation
+preview), `MG-08` (modify/cancel after identity verification — cancel implemented),
+`AI-02` (slot-filling via tool schemas), `AI-03` (OTP identity before disclosure),
+`AI-06` (confirmation on booking/change — `BOOKING_RECEIVED`/`BOOKING_CANCELLED`),
+`AI-08` (same service layer), §4, §5.4.
 
-**Gate:** `/api/v1/ai/*` narrow op set; HMAC signature + replay-window verified;
-tool JSON Schemas match web/staff DTOs; identity-OTP issuance; audit tagged
-`ai_*`; tests: bad-signature rejected, no-OTP modification rejected, valid signed
-OTP request succeeds + audits.
+**NOT deliverable by code alone (recorded):** `AI-01`/`BK-10`/`BK-11` (voice + phone
+need a live ElevenLabs agent + provisioned SIP trunk — README is documentation, not
+verification), `AI-04` (human escalation — no mechanism), `AI-05` (FAQ KB — no entity),
+`AI-07` (call transcripts — `CallSession`/`Transcript` deferred). MG-03-style
+reschedule also deferred (cancel is implemented).
+
+**Security fix to `main` (was a live vuln):** the Phase-4 booking-OTP token was
+signed with `JWT_ACCESS_SECRET` and had no `kind`, so `AuthContextGuard` accepted it
+as a **guest access token**. Fixed: separate `JWT_BOOKING_SECRET` + `typ` claim, and
+the guard now **rejects any non-access token** (verified: `/auth/me` with a
+verification token → 401). Also fixed a Phase-7 over-restriction: the named `ai`
+throttler applied to **all** routes (capping the whole API at 30/min) — reverted to a
+single default bucket + per-route `@Throttle`.
+
+**Gate — all pass (9 AI e2e tests):**
+
+- [x] `/api/v1/ai/*` narrow op set (availability, create, otp request/verify, get, cancel) — all through the same services (AI-08).
+- [x] **HMAC** over the exact raw bytes + ±5-min window + **one-time nonce** replay rejection (§5.4). Verified: bad signature → 401, stale timestamp → 401, **replay of a valid request → 401**.
+- [x] Tool **JSON Schemas** (`GET /ai/tools`) matching the DTOs; AI bodies validated with the **shared Zod** (strips provider envelope metadata instead of 400-ing).
+- [x] **OTP identity gate**: cancel without a verification token → 401; code+lastName → OTP to the contact **on file** → token → disclose/cancel. Per-booking OTP request cap.
+- [x] Every AI write **audited with `channel = ai_*`** (verified `AI_VOICE`); `BOOKING_RECEIVED` notification on AI create.
+- [x] **Idempotency** on AI create — same key → one booking (webhook-retry safe, invariant #7).
+- [x] **AI-08 proven**: an AI-created booking hits the **same concurrency guard** (two AI bookings for the last room → one 201, one 409).
+- [x] SIP/Telnyx provisioning README (`modules/ai/README.md`).
+
+**Verification evidence (2026-08-22):** `pnpm --filter @hotel/api test` → **5 suites /
+23 tests**. typecheck/lint clean; web+staff build clean.
 
 ---
 
