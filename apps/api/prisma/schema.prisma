@@ -650,11 +650,10 @@ model User {
 // Property-scoped access for a staff user (§5.6). ADMIN role bypasses scoping in
 // the application layer; all other roles must have a row here per property.
 model StaffPropertyAccess {
-  id         String     @id @default(uuid()) @db.Uuid
-  userId     String     @db.Uuid
-  propertyId String     @db.Uuid
-  role       StaffRole? // optional per-property role override
-  createdAt  DateTime   @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  propertyId String   @db.Uuid
+  createdAt  DateTime @default(now())
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)

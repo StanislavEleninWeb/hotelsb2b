@@ -12,6 +12,7 @@ import { Property, StaffRole } from '@prisma/client';
 import { Audit } from '../../common/audit/audit.decorator';
 import { AuditLogInterceptor } from '../../common/audit/audit-log.interceptor';
 import { Roles } from '../../common/auth/roles.decorator';
+import { PropertyScope } from '../../auth/guards/property-scope.guard';
 import { PropertiesService } from './properties.service';
 import { CreatePropertyDto, UpdatePropertyDto } from './dto/property.dto';
 
@@ -36,8 +37,9 @@ export class PropertiesController {
     return this.properties.findPublishedOne(id);
   }
 
+  // Creating a property is global onboarding — ADMIN only (no existing property to scope to).
   @Post()
-  @Roles(StaffRole.ADMIN, StaffRole.MANAGER)
+  @Roles(StaffRole.ADMIN)
   @Audit('Property', 'create')
   create(@Body() dto: CreatePropertyDto): Promise<Property> {
     return this.properties.create(dto);
@@ -45,6 +47,7 @@ export class PropertiesController {
 
   @Patch(':id')
   @Roles(StaffRole.ADMIN, StaffRole.MANAGER)
+  @PropertyScope('property', 'id')
   @Audit('Property', 'update')
   update(
     @Param('id', ParseUUIDPipe) id: string,

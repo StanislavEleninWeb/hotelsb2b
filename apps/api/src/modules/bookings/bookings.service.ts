@@ -1,5 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Booking, BookingStatus, Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Booking, BookingRoom, BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { ActionContext } from '../../common/action-context';
@@ -159,6 +164,97 @@ export class BookingsService {
     throw new Error('Could not allocate a unique confirmation code');
   }
 
+  /** Staff calendar (ST-02): active bookings overlapping a property's date window. */
+  listForProperty(propertyId: string, from: Date, to: Date): Promise<Booking[]> {
+    return this.prisma.booking.findMany({
+      where: {
+        propertyId,
+        checkIn: { lt: to },
+        checkOut: { gt: from },
+        status: { notIn: [BookingStatus.CANCELLED, BookingStatus.NO_SHOW] },
+      },
+      orderBy: { checkIn: 'asc' },
+      include: {
+        primaryGuest: { select: { firstName: true, lastName: true } },
+        rooms: {
+          include: {
+            roomType: { select: { name: true } },
+            room: { select: { number: true } },
+          },
+        },
+      },
+    });
+  }
+
+  /** Audit trail for a booking (ST-17) — surfaced in the staff UI per mutation. */
+  auditTrail(bookingId: string) {
+    return this.prisma.auditLog.findMany({
+      where: { entityType: 'Booking', entityId: bookingId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  /**
+   * Assign a physical room to a BookingRoom (ST-05), concurrency-safe. Locks the
+   * SPECIFIC target room row (FOR UPDATE — not SKIP LOCKED, which is for picking any
+   * free room), so two staff assigning the same room to overlapping bookings
+   * serialize and exactly one wins; the other sees the committed assignment and 409s.
+   */
+  async assignRoom(bookingRoomId: string, roomId: string): Promise<BookingRoom> {
+    return this.prisma.$transaction(async (tx) => {
+      const br = await tx.bookingRoom.findUnique({
+        where: { id: bookingRoomId },
+        include: { booking: { select: { status: true } } },
+      });
+      if (!br) throw new NotFoundException('Booking room not found');
+      if (br.booking.status === BookingStatus.CANCELLED || br.booking.status === BookingStatus.NO_SHOW) {
+        throw new BadRequestException('Booking is not active');
+      }
+
+      const rows = await tx.$queryRaw<
+        Array<{ id: string; propertyId: string; roomTypeId: string; status: string; active: boolean }>
+      >`
+        SELECT id::text AS id, "propertyId"::text AS "propertyId",
+               "roomTypeId"::text AS "roomTypeId", status::text AS status, active
+        FROM "Room" WHERE id = ${roomId}::uuid FOR UPDATE
+      `;
+      const room = rows[0];
+      if (!room) throw new NotFoundException('Room not found');
+      if (!room.active || room.status === 'OUT_OF_SERVICE') {
+        throw new BadRequestException('Room is not assignable');
+      }
+      if (room.propertyId !== br.propertyId) {
+        throw new BadRequestException('Room belongs to a different property');
+      }
+      if (room.roomTypeId !== br.roomTypeId) {
+        throw new BadRequestException('Room type does not match the booked room type');
+      }
+
+      const clashBooking = await tx.bookingRoom.findFirst({
+        where: {
+          roomId,
+          id: { not: bookingRoomId },
+          checkIn: { lt: br.checkOut },
+          checkOut: { gt: br.checkIn },
+          booking: {
+            status: {
+              in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN],
+            },
+          },
+        },
+      });
+      if (clashBooking) throw new ConflictException('That room is already assigned for overlapping dates');
+
+      const clashBlock = await tx.roomBlock.findFirst({
+        where: { roomId, startDate: { lt: br.checkOut }, endDate: { gt: br.checkIn } },
+      });
+      if (clashBlock) throw new ConflictException('That room is blocked for these dates');
+
+      return tx.bookingRoom.update({ where: { id: bookingRoomId }, data: { roomId } });
+    });
+  }
+
   /** MG-02: a logged-in guest's own bookings. */
   listForGuest(guestId: string): Promise<Booking[]> {
     return this.prisma.booking.findMany({
@@ -181,6 +277,7 @@ export class BookingsService {
         rooms: {
           include: {
             roomType: { select: { name: true } },
+            room: { select: { number: true } },
             ratePlan: {
               select: { name: true, cancellationPolicy: true, refundableUntilHrs: true },
             },

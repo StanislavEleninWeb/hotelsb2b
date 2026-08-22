@@ -14,12 +14,13 @@ import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthUser } from '../auth-user';
 
-export type ScopedResource = 'booking' | 'property' | 'room' | 'ratePlan';
+export type ScopedResource = 'booking' | 'property' | 'room' | 'ratePlan' | 'bookingRoom' | 'guest';
 
 export const PROPERTY_SCOPE_META = 'auth:propertyScope';
 export interface PropertyScopeMeta {
   resource: ScopedResource;
   param: string;
+  source: 'param' | 'body';
 }
 
 /**
@@ -28,9 +29,14 @@ export interface PropertyScopeMeta {
  * `@PropertyScope('booking', 'id')` → load that booking, then:
  *   - staff: allowed if ADMIN or they have StaffPropertyAccess for its property (else 403)
  *   - guest: allowed only for their OWN booking (else 404 — don't leak existence)
+ * Use `source: 'body'` for create endpoints where the id is in the request body
+ * (e.g. `@PropertyScope('property', 'propertyId', 'body')`).
  */
-export const PropertyScope = (resource: ScopedResource, param = 'id') =>
-  SetMetadata(PROPERTY_SCOPE_META, { resource, param } satisfies PropertyScopeMeta);
+export const PropertyScope = (
+  resource: ScopedResource,
+  param = 'id',
+  source: 'param' | 'body' = 'param',
+) => SetMetadata(PROPERTY_SCOPE_META, { resource, param, source } satisfies PropertyScopeMeta);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,9 +59,14 @@ export class PropertyScopeGuard implements CanActivate {
     if (!user) throw new UnauthorizedException('Authentication required');
 
     // Guards run before pipes, so validate the id ourselves (avoid a DB 500 on junk).
-    const rawParam = req.params[meta.param];
+    const rawParam =
+      meta.source === 'body'
+        ? (req.body as Record<string, unknown> | undefined)?.[meta.param]
+        : req.params[meta.param];
     const id = Array.isArray(rawParam) ? rawParam[0] : rawParam;
-    if (!id || !UUID_RE.test(id)) throw new BadRequestException(`Invalid ${meta.param}`);
+    if (typeof id !== 'string' || !UUID_RE.test(id)) {
+      throw new BadRequestException(`Invalid ${meta.param}`);
+    }
 
     const target = await this.resolve(meta.resource, id);
     if (!target) throw new NotFoundException(`${meta.resource} not found`);
@@ -108,6 +119,18 @@ export class PropertyScopeGuard implements CanActivate {
           select: { propertyId: true },
         });
         return rp ? { propertyId: rp.propertyId } : null;
+      }
+      case 'bookingRoom': {
+        const br = await this.prisma.bookingRoom.findUnique({
+          where: { id },
+          select: { propertyId: true },
+        });
+        return br ? { propertyId: br.propertyId } : null;
+      }
+      case 'guest': {
+        // Guests aren't property-scoped; guest endpoints filter by the caller's
+        // accessible properties in the service. This branch shouldn't be reached.
+        return null;
       }
     }
   }

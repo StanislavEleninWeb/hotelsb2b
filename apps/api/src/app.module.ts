@@ -19,6 +19,7 @@ import { BookingsModule } from './modules/bookings/bookings.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { RatePlansModule } from './modules/rate-plans/rate-plans.module';
+import { GuestsModule } from './modules/guests/guests.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { RatePlansModule } from './modules/rate-plans/rate-plans.module';
     PropertiesModule,
     RoomsModule,
     RatePlansModule,
+    GuestsModule,
   ],
   controllers: [AppController],
   // Global guard order matters and runs top-to-bottom:

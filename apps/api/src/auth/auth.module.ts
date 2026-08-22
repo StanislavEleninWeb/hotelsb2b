@@ -6,6 +6,7 @@ import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { OtpService } from './otp.service';
 import { AuthLockoutService } from './auth-lockout.service';
+import { PropertyAccessService } from './property-access.service';
 import { AuthContextGuard } from './guards/auth-context.guard';
 import { PropertyScopeGuard } from './guards/property-scope.guard';
 import { CsrfGuard } from './guards/csrf.guard';
@@ -20,11 +21,12 @@ import { JwtAuthGuard } from './decorators';
     TokenService,
     OtpService,
     AuthLockoutService,
+    PropertyAccessService,
     AuthContextGuard,
     PropertyScopeGuard,
     CsrfGuard,
     JwtAuthGuard,
   ],
-  exports: [TokenService, AuthService],
+  exports: [TokenService, AuthService, PropertyAccessService],
 })
 export class AuthModule {}

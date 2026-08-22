@@ -19,7 +19,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | 3 | NestJS booking API core | 🟡 gate GREEN (PR open) | on feat/phase-3-booking-api |
 | 4 | Auth & access control | 🟡 gate GREEN (PR open) | on feat/phase-4-auth |
 | 5 | Public web app | 🟡 gate GREEN (PR open) | on feat/phase-5-web |
-| 6 | Internal staff panel | ⬜ | — |
+| 6 | Internal staff panel | 🟡 gate GREEN (PR open) | on feat/phase-6-staff |
 | 7 | Search & caching layer | ⬜ | — |
 | 8 | AI assistant integration | ⬜ | — |
 | 9 | Mobile app (Expo) | ⬜ | — |
@@ -241,13 +241,42 @@ SSR still crawlable); dev-refresh transient remount on `/book` (fresh loads fine
 
 ---
 
-## Phase 6 — Internal Staff Panel  ⬜
+## Phase 6 — Internal Staff Panel  🟡 gate GREEN  _(branch: feat/phase-6-staff, PR open)_
 
-**Satisfies:** `ST-01..17`, `RP-*` entry points, §5.6.
+**Satisfies:** `ST-02` (calendar/grid), `ST-03` (modify + audit), `ST-04` (room
+block), `ST-05` (physical-room assignment), `ST-06` (check-in/out — **ID
+verification is a UI gate only; the ID-document record/upload is deferred**),
+`ST-08`/`ST-09` (rate-plan + room management), `ST-12` (guest profile, role-scoped),
+`ST-13` (housekeeping status), `ST-15` (no-show), `ST-16`/`ST-17` (RBAC + audit
+surfaced per mutation), §5.4/§5.6.
 
-**Gate:** calendar/grid; booking create/modify on behalf; check-in/out + ID;
-room block/assign + housekeeping board; rate-plan UI; guest profile (role-scoped);
-RBAC/scope mirrors API (hide + server-enforced); audit entry surfaced per mutation.
+**Explicitly NOT this phase (recorded, not faked):** `ST-06` ID-document capture
+(→ private S3 + content-sniffing/scan, §5.1), `ST-11` front-desk payments (no
+endpoint; Stripe → Phase 8), `ST-01` full create-on-behalf UI (API create exists;
+staff create-booking form deferred), `ST-07` split/merge, `ST-14` waitlist/overbooking.
+
+**Security fixes to `main` this phase (were live BOLA holes):** added
+`@PropertyScope` to rooms/rate-plans/properties writes (front-desk at A could edit
+B's inventory/pricing); moved room listing to `GET /rooms/by-property/:propertyId`;
+body-field scoping for creates; restricted property creation to ADMIN; dropped the
+unused `StaffPropertyAccess.role` column (advisor: "wire it or drop it").
+
+**API additions:** `GET /bookings/by-property/:propertyId` (calendar),
+`PATCH /bookings/booking-rooms/:id/assign` (concurrency-safe), `POST /rooms/:id/block`,
+`GET /bookings/:id/audit`, `GET /guests/:id` + `POST /guests/:id/notes` (subject-driven
+scope filtering), `GET /rate-plans/by-property/:propertyId`.
+
+**Gate — all pass:**
+
+- [x] Property-scoped calendar/grid + housekeeping/rooms board — **verified in browser** (grand-harbor: WQE6PYKW on the calendar, rooms with status controls).
+- [x] Check-in/out via guarded transitions, **ID-verified gate** before check-in; `CHECKED_IN → CANCELLED` added for early departure.
+- [x] **Concurrency-safe room assignment** (FOR UPDATE on the target room) — test: two concurrent assigns of the same room → exactly one wins.
+- [x] Room block (rejects overlap with active bookings), housekeeping status, rate-plan management UI, guest profile + notes.
+- [x] **RBAC/property-scope enforced server-side** — test: front-desk scoped to A gets **403** listing/patching B's rooms; ADMIN unrestricted.
+- [x] Audit entry surfaced per mutation — **verified** (booking detail shows `create · web`).
+- [x] CSP builder extracted to `@hotel/shared/security` (one definition, web + staff) — Edge-runtime-safe subpath (no Zod).
+
+**Verification evidence (2026-08-22):** `pnpm --filter @hotel/api test` → **4 suites / 15 tests** (incl. staff BOLA + assign concurrency). Web + staff `next build` clean; `pnpm -r typecheck`/`lint` clean. Browser: admin login → grand-harbor calendar/rooms/booking-detail/audit all render against the live API.
 
 ---
 
