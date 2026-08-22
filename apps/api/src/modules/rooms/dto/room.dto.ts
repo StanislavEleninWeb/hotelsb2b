@@ -1,5 +1,26 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { RoomStatus } from '@prisma/client';
+
+export class BlockRoomDto {
+  @IsISO8601()
+  startDate!: string;
+
+  @IsISO8601()
+  endDate!: string;
+
+  @IsString()
+  @MaxLength(200)
+  reason!: string;
+}
 
 export class CreateRoomDto {
   @IsUUID()

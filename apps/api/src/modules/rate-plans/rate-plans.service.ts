@@ -7,6 +7,15 @@ import { CreateRatePlanDto, UpdateRatePlanDto } from './dto/rate-plan.dto';
 export class RatePlansService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Staff: all rate plans for a property (with room-type name), for management. */
+  listByProperty(propertyId: string): Promise<RatePlan[]> {
+    return this.prisma.ratePlan.findMany({
+      where: { propertyId },
+      orderBy: [{ roomTypeId: 'asc' }, { basePriceMinor: 'asc' }],
+      include: { roomType: { select: { name: true } } },
+    });
+  }
+
   /** Public: active rate plans for a room type. */
   findPublishedByRoomType(roomTypeId: string): Promise<RatePlan[]> {
     return this.prisma.ratePlan.findMany({

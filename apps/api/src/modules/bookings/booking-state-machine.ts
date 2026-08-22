@@ -6,7 +6,8 @@ import { BookingStatus } from '@prisma/client';
 const TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
   PENDING_PAYMENT: [BookingStatus.CONFIRMED, BookingStatus.CANCELLED],
   CONFIRMED: [BookingStatus.CHECKED_IN, BookingStatus.CANCELLED, BookingStatus.NO_SHOW],
-  CHECKED_IN: [BookingStatus.CHECKED_OUT],
+  // CHECKED_IN → CANCELLED supports early departure / disputes (staff-initiated).
+  CHECKED_IN: [BookingStatus.CHECKED_OUT, BookingStatus.CANCELLED],
   CHECKED_OUT: [],
   CANCELLED: [],
   NO_SHOW: [],

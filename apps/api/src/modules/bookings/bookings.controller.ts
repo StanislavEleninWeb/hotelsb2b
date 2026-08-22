@@ -5,12 +5,14 @@ import {
   Headers,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Booking, StaffRole } from '@prisma/client';
+import { Booking, BookingRoom, StaffRole } from '@prisma/client';
 import { ActionContext, Ctx } from '../../common/action-context';
 import { Audit } from '../../common/audit/audit.decorator';
 import { AuditLogInterceptor } from '../../common/audit/audit-log.interceptor';
@@ -23,6 +25,7 @@ import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { LookupBookingDto } from './dto/booking-query.dto';
 import { TransitionBookingDto } from './dto/transition-booking.dto';
+import { AssignRoomDto } from './dto/assign-room.dto';
 
 @Controller('bookings')
 @UseInterceptors(AuditLogInterceptor)
@@ -61,6 +64,32 @@ export class BookingsController {
     return user.kind === 'guest' ? this.bookings.listForGuest(user.id) : Promise.resolve([]);
   }
 
+  // Staff calendar/grid for a property over a date window (ST-02).
+  @Get('by-property/:propertyId')
+  @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.FINANCE, StaffRole.HOUSEKEEPING, StaffRole.ADMIN)
+  @PropertyScope('property', 'propertyId')
+  calendar(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<Booking[]> {
+    const fromDate = new Date(`${(from ?? new Date().toISOString()).slice(0, 10)}T00:00:00.000Z`);
+    const toDate = new Date(`${(to ?? '2100-01-01').slice(0, 10)}T00:00:00.000Z`);
+    return this.bookings.listForProperty(propertyId, fromDate, toDate);
+  }
+
+  // Assign a physical room to a booking room (ST-05). Staff, property-scoped.
+  @Patch('booking-rooms/:id/assign')
+  @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.ADMIN)
+  @PropertyScope('bookingRoom', 'id')
+  @Audit('BookingRoom', 'assign_room')
+  assignRoom(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignRoomDto,
+  ): Promise<BookingRoom> {
+    return this.bookings.assignRoom(id, dto.roomId);
+  }
+
   // Object-level authorization (BOLA, §5.6): the owning guest OR staff scoped to
   // the booking's property. PropertyScopeGuard 401s anonymous, 403s out-of-scope
   // staff, 404s a guest asking for someone else's booking.
@@ -75,6 +104,14 @@ export class BookingsController {
   @PropertyScope('booking', 'id')
   cancellationPreview(@Param('id', ParseUUIDPipe) id: string) {
     return this.bookings.cancellationPreview(id);
+  }
+
+  // Audit trail for a booking (ST-17) — staff, property-scoped.
+  @Get(':id/audit')
+  @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.FINANCE, StaffRole.ADMIN)
+  @PropertyScope('booking', 'id')
+  audit(@Param('id', ParseUUIDPipe) id: string) {
+    return this.bookings.auditTrail(id);
   }
 
   // Cancel — owning guest or property-scoped staff (same BOLA rule).
