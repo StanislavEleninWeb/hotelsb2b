@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Native/postinstall build scripts we explicitly trust:
+#   esbuild        — backs tsup (packages/shared dual build)
+#   sharp          — Next.js image optimization
+#   unrs-resolver  — ESLint import resolver native binding
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
