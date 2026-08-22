@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -9,6 +10,9 @@ async function bootstrap() {
 
   // Structured logging (pino) with per-request correlation ids.
   app.useLogger(app.get(Logger));
+
+  // Parse cookies for cookie-based web sessions (auth + CSRF).
+  app.use(cookieParser());
 
   // API-first: every client hits the one versioned API. See CLAUDE.md invariant #7.
   app.setGlobalPrefix('api/v1');
