@@ -16,7 +16,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | 0 | Monorepo scaffold | 🟡 gate GREEN | pending review/commit |
 | 1 | Terraform base infra | 🟡 gate GREEN | pending review/commit |
 | 2 | Database schema (Prisma) | 🟡 gate GREEN | pending review/commit |
-| 3 | NestJS booking API core | ⬜ | — |
+| 3 | NestJS booking API core | 🟡 gate GREEN (PR open) | on feat/phase-3-booking-api |
 | 4 | Auth & access control | ⬜ | — |
 | 5 | Public web app | ⬜ | — |
 | 6 | Internal staff panel | ⬜ | — |
@@ -142,16 +142,34 @@ Char→VarChar, day-of-week bitmask moved to `@hotel/shared`, and rating/money C
 
 ---
 
-## Phase 3 — NestJS Booking API Core  ⬜
+## Phase 3 — NestJS Booking API Core  🟡 gate GREEN  _(branch: feat/phase-3-booking-api)_
 
-**Satisfies:** `SD-01`, `SD-04`, `BK-01`, `BK-06`, `BK-07`, `MG-02..04`,
-`ST-01..05`, `AI-08`, `NF-03`.
+**Satisfies:** `SD-01`/`SD-04` (availability search + pricing), `BK-01` (multi-room),
+`BK-07` (concurrency-safe), `MG-01`/`MG-02`/`MG-04` (lookup, view, cancel),
+`ST-01..05`/`ST-08..09` (staff CRUD for properties/rooms/rate plans),
+`AI-08` (AI channel uses the same service path), `NF-03`.
 
-**Gate:** global `ValidationPipe {whitelist, forbidNonWhitelisted}`;
-`Idempotency-Key` honored on booking create; booking state machine transitions
-guarded; audit interceptor on every write; Redis throttler (tighter for
-unauth); **concurrency test proves two simultaneous bookings for the last room →
-exactly one succeeds**; global exception filter hides internals.
+**Gate — all pass:**
+
+- [x] Global `ValidationPipe {whitelist, forbidNonWhitelisted, transform}` — verified: bad UUID → 400.
+- [x] `Idempotency-Key` on booking create — verified end-to-end: same key → same booking id, 1 row in DB.
+- [x] Booking state machine with guarded transitions — unit-tested (legal + illegal moves).
+- [x] `AuditLogInterceptor` on every write — verified: create logs `action=create`, `channel=AI_CHAT`, after-state + correlationId.
+- [x] Redis-backed throttler, **tighter for unauth** — verified: `/availability` `x-ratelimit-limit: 20` vs default `100`; `/bookings/lookup` = 5.
+- [x] **Concurrency (BK-07)** — 2 simultaneous bookings for the last room → exactly one succeeds, other gets `ConflictException`; DB holds 1 booking. `FOR UPDATE ... SKIP LOCKED`. Jest test passes.
+- [x] Global exception filter — generic message + correlationId to client; stack traces only to pino logs.
+- [x] Properties/Rooms/RatePlans CRUD with role guards — public reads open; staff writes **fail closed** (403 without auth, verified). Function-level authz via `@Roles` + `RolesGuard` (Phase 4 supplies the JWT that populates `req.user`).
+
+**Verification evidence (2026-08-22):**
+- `pnpm --filter @hotel/api test` → 2 suites, 5 tests pass (concurrency ×2, state machine ×3).
+- API boots with Prisma + Redis + throttler + pino; `curl` smoke tests: health 200, validation 400, auth 403, rate-limit headers per-endpoint.
+- Idempotency + audit verified against live Postgres/Redis via throwaway scripts.
+- `pnpm -r typecheck` / `pnpm -r lint` clean.
+
+**Deferred to later phases (by design):** payment capture / booking confirmation
+webhook (Stripe — Phase 5/8), booking modify/reschedule `MG-03` (S), and the JWT
+auth that populates `req.user` for the role guards (**Phase 4**). Guards fail
+closed until then.
 
 ---
 
