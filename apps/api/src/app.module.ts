@@ -3,11 +3,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { BullModule } from '@nestjs/bullmq';
 import { LoggerModule } from 'nestjs-pino';
 import Redis from 'ioredis';
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
+import { CacheModule } from './cache/cache.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { SearchModule } from './modules/search/search.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { RolesGuard } from './common/auth/roles.guard';
 import { AuthModule } from './auth/auth.module';
@@ -48,7 +52,13 @@ import { GuestsModule } from './modules/guests/guests.module';
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+        // 'default' = general traffic; 'ai' = tighter bucket for the AI assistant's
+        // tool-invocation endpoints (Phase 8) so a runaway agent can't hammer the
+        // booking engine independently of general API traffic (§5.5).
+        throttlers: [
+          { name: 'default', ttl: 60_000, limit: 100 },
+          { name: 'ai', ttl: 60_000, limit: 30 },
+        ],
         storage: new ThrottlerStorageRedisService(
           new Redis(config.get<string>('REDIS_URL') ?? 'redis://localhost:6379', {
             maxRetriesPerRequest: null,
@@ -56,8 +66,23 @@ import { GuestsModule } from './modules/guests/guests.module';
         ),
       }),
     }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const url = new URL(config.get<string>('REDIS_URL') ?? 'redis://localhost:6379');
+        return {
+          connection: {
+            host: url.hostname,
+            port: Number(url.port || 6379),
+            password: url.password || undefined,
+            maxRetriesPerRequest: null,
+          },
+        };
+      },
+    }),
     PrismaModule,
     RedisModule,
+    CacheModule,
     AuthModule,
     AvailabilityModule,
     BookingsModule,
@@ -65,13 +90,19 @@ import { GuestsModule } from './modules/guests/guests.module';
     RoomsModule,
     RatePlansModule,
     GuestsModule,
+    NotificationsModule,
+    SearchModule,
   ],
   controllers: [AppController],
   // Global guard order matters and runs top-to-bottom:
   //   Throttler → AuthContext (populate req.user) → Roles (BFLA) →
   //   PropertyScope (BOLA) → Csrf (cookie sessions).
   providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // THROTTLE_DISABLED=1 removes the global rate limiter (local load testing only —
+    // never set in staging/prod).
+    ...(process.env.THROTTLE_DISABLED === '1'
+      ? []
+      : [{ provide: APP_GUARD, useClass: ThrottlerGuard }]),
     { provide: APP_GUARD, useClass: AuthContextGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: PropertyScopeGuard },

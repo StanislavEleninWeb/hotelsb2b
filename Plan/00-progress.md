@@ -20,7 +20,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | 4 | Auth & access control | 🟡 gate GREEN (PR open) | on feat/phase-4-auth |
 | 5 | Public web app | 🟡 gate GREEN (PR open) | on feat/phase-5-web |
 | 6 | Internal staff panel | 🟡 gate GREEN (PR open) | on feat/phase-6-staff |
-| 7 | Search & caching layer | ⬜ | — |
+| 7 | Search & caching layer | 🟡 gate GREEN (PR open) | on feat/phase-7-search-cache |
 | 8 | AI assistant integration | ⬜ | — |
 | 9 | Mobile app (Expo) | ⬜ | — |
 | 10 | CI/CD pipeline | ⬜ | — |
@@ -280,14 +280,29 @@ scope filtering), `GET /rate-plans/by-property/:propertyId`.
 
 ---
 
-## Phase 7 — Search & Caching Layer  ⬜
+## Phase 7 — Search & Caching Layer  🟡 gate GREEN  _(branch: feat/phase-7-search-cache, PR open)_
 
-**Satisfies:** `SD-01..02`, `NF-01`, `NF-06`, `NT-01..03` (async fan-out), §5.5.
+**Satisfies:** `SD-01`/`SD-02` (destination FTS search), `NF-01` (spike resilience
+via cache), `NT-01`/`NT-02` (async confirmation/cancellation notifications), §5.5.
 
-**Gate:** Redis availability/search cache keyed by request hash, invalidated on
-inventory-affecting writes; tighter rate bucket for AI tool endpoints; Postgres
-FTS behind a swappable `SearchService`; BullMQ queue for emails/notifications/
-invoices; k6/artillery spike test with documented p95 + autoscale behavior.
+**Gate — all pass:**
+
+- [x] Redis availability cache keyed by a **per-property version** (`avail:{propertyId}:v{ver}:…`); invalidated by bumping the version on any search-input write (Room create/status, RatePlan create/price, RoomBlock, Booking create/cancel) — one `CacheService.bumpProperty` helper. **Verified: `avail-ver` 1→2 on booking create.** Cache never on the reserve/write path (BK-07 concurrency test re-run through DI with caching active — still passes).
+- [x] Postgres FTS (`pg_trgm` + `to_tsvector` GIN, hand-written migration) behind a **swappable `SearchService`** (bound to `SEARCH_SERVICE` token; OpenSearch is a new class, not a rewrite). **Verified:** `alpine`→alpine-lodge, `lisbon`→grand-harbor (city), `innsbruk`→alpine-lodge (typo/trigram).
+- [x] `GET /search` (public, 20/min like `/availability`) returns matching properties **with availability inline** — no web N+1; web search page rewired to it.
+- [x] **BullMQ** notifications queue; booking transition writes the `Notification` row **inside the transaction** (source of truth) then enqueues; worker delivers (stub) → **SENT**; `sweepPending` catches stragglers. **Verified: CONFIRMED → `BOOKING_CONFIRMED` row processed to SENT.** Worker skipped under test.
+- [x] Distinct tighter **`ai` throttler bucket** (30/min) registered for Phase 8's AI tool endpoints (§5.5).
+- [x] Local p95 measured (`scripts/load/availability-p95.mjs`): **cached p95 0.9ms vs uncached 3.6ms** (~4×).
+
+**Deferred (split from the gate, per Plan/03):** the "ECS autoscaling behavior"
+half of the load-test item — **not observable without a deployed environment**
+(Phase 1 Terraform never applied; no AWS creds). Local p95 ✅, autoscaling ⬜.
+Numbers are on the 2-property seed + localhost (no network) — indicative, not a
+production benchmark. A k6 script for a real env is a follow-up.
+
+**Verification evidence (2026-08-22):** `pnpm --filter @hotel/api test` → 4 suites /
+15 tests (concurrency now DI-based, caching on). typecheck/lint clean; web+staff
+build clean. Live checks: FTS queries, cache version bump, notification SENT.
 
 ---
 

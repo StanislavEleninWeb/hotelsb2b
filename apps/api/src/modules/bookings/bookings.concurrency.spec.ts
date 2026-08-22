@@ -1,19 +1,20 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import { CancellationPolicy, Channel, PaymentType } from '@prisma/client';
+import { AppModule } from '../../app.module';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AvailabilityService } from '../availability/availability.service';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { ActionContext } from '../../common/action-context';
 
 // The BK-07 guarantee: two guests racing for the LAST available room of a type —
-// exactly one booking succeeds, the other gets a ConflictException. Exercises the
-// `FOR UPDATE ... SKIP LOCKED` reservation in AvailabilityService against a real
-// Postgres (docker compose up).
+// exactly one booking succeeds, the other gets a ConflictException. Runs through
+// the full app (DI) so the Phase 7 availability CACHE is active — verifying the
+// cache never sits on the write path.
 describe('Booking concurrency (BK-07)', () => {
-  const prisma = new PrismaService();
-  const availability = new AvailabilityService(prisma);
-  const bookings = new BookingsService(prisma, availability);
+  let app: INestApplication;
+  let prisma: PrismaService;
+  let bookings: BookingsService;
   const ctx: ActionContext = { channel: Channel.WEB };
 
   let propertyId: string;
@@ -22,18 +23,20 @@ describe('Booking concurrency (BK-07)', () => {
   const slug = `concurrency-test-${Date.now()}`;
 
   beforeAll(async () => {
-    await prisma.$connect();
-    // Seed a property with a room type that has exactly ONE physical room.
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+    prisma = app.get(PrismaService);
+    bookings = app.get(BookingsService);
+
     const property = await prisma.property.create({
       data: { slug, name: 'Concurrency Test Hotel', currency: 'EUR' },
     });
     propertyId = property.id;
-
     const roomType = await prisma.roomType.create({
       data: { propertyId, slug: 'std', name: 'Standard', maxAdults: 2, maxChildren: 0 },
     });
     roomTypeId = roomType.id;
-
     const ratePlan = await prisma.ratePlan.create({
       data: {
         propertyId,
@@ -47,16 +50,12 @@ describe('Booking concurrency (BK-07)', () => {
       },
     });
     ratePlanId = ratePlan.id;
-
-    // Exactly one room — the contested inventory unit.
-    await prisma.room.create({
-      data: { propertyId, roomTypeId, number: '101' },
-    });
+    await prisma.room.create({ data: { propertyId, roomTypeId, number: '101' } });
   });
 
   afterAll(async () => {
     await prisma.property.delete({ where: { id: propertyId } }).catch(() => undefined);
-    await prisma.$disconnect();
+    await app.close();
   });
 
   it('lets exactly one of two simultaneous bookings win the last room', async () => {
@@ -75,12 +74,10 @@ describe('Booking concurrency (BK-07)', () => {
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected');
-
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
 
-    // And the database holds exactly one booking for this property.
     const count = await prisma.booking.count({ where: { propertyId } });
     expect(count).toBe(1);
   });
@@ -93,8 +90,7 @@ describe('Booking concurrency (BK-07)', () => {
       rooms: [{ roomTypeId, ratePlanId, adults: 1, children: 0 }],
       primaryGuest: { firstName: 'Sequential', lastName: 'Guest' },
     };
-
-    await bookings.create(dto, ctx); // takes the only room
+    await bookings.create(dto, ctx);
     await expect(bookings.create(dto, ctx)).rejects.toBeInstanceOf(ConflictException);
   });
 });

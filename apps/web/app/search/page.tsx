@@ -9,42 +9,30 @@ export const metadata = { title: "Search results" };
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-// SSR results (SD-01/SD-04). NOTE: destination/keyword search + filters are the
-// Phase 7 SearchService (Postgres FTS); here we search over /properties and
-// per-property availability, filtering by name/city client-side as a placeholder.
+interface SearchRow {
+  property: PropertySummary;
+  availability: AvailabilityResult[];
+}
+
+// SSR results (SD-01/SD-04). Uses the Phase 7 GET /search endpoint — Postgres FTS
+// destination search with availability computed server-side in one call (no N+1).
 export default async function SearchPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const checkIn = one(sp.checkIn) ?? "";
   const checkOut = one(sp.checkOut) ?? "";
   const adults = one(sp.adults) ?? "2";
   const children = one(sp.children) ?? "0";
-  const destination = (one(sp.destination) ?? "").toLowerCase();
+  const destination = one(sp.destination) ?? "";
 
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(checkIn) && /^\d{4}-\d{2}-\d{2}$/.test(checkOut) && checkOut > checkIn;
 
-  let properties: PropertySummary[] = [];
-  try {
-    properties = await serverGet<PropertySummary[]>("/properties");
-  } catch {
-    /* handled below */
+  const qs = new URLSearchParams({ adults, children });
+  if (destination) qs.set("destination", destination);
+  if (valid) {
+    qs.set("checkIn", checkIn);
+    qs.set("checkOut", checkOut);
   }
-  if (destination) {
-    properties = properties.filter(
-      (p) => p.name.toLowerCase().includes(destination) || (p.city ?? "").toLowerCase().includes(destination),
-    );
-  }
-
-  const results = valid
-    ? await Promise.all(
-        properties.map(async (p) => {
-          const qs = new URLSearchParams({ propertyId: p.id, checkIn, checkOut, adults, children });
-          const availability = await serverGet<AvailabilityResult[]>(`/availability?${qs}`).catch(
-            () => [] as AvailabilityResult[],
-          );
-          return { property: p, availability };
-        }),
-      )
-    : [];
+  const results = await serverGet<SearchRow[]>(`/search?${qs}`).catch(() => [] as SearchRow[]);
 
   return (
     <>
