@@ -1,10 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Channel } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from './auth-user';
@@ -27,8 +21,6 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly otp: OtpService,
     private readonly lockout: AuthLockoutService,
-    private readonly jwt: JwtService,
-    private readonly config: ConfigService,
   ) {}
 
   private async audit(action: string, actor: { userId?: string; guestId?: string }): Promise<void> {
@@ -136,15 +128,11 @@ export class AuthService {
     return this.otp.issueBookingOtp(bookingId);
   }
 
-  /** Short-lived signed token proving a booking-action OTP was verified (Phase 8). */
+  /** Short-lived signed token proving a booking-action OTP was verified (Phase 8).
+   * Signed with a SEPARATE secret so it can never be used as an access token. */
   async verifyBookingOtp(bookingId: string, code: string): Promise<{ verificationToken: string }> {
     await this.otp.verifyBookingOtp(bookingId, code);
-    const secret = this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret';
-    const verificationToken = this.jwt.sign(
-      { bookingId, purpose: 'booking_action' },
-      { secret, expiresIn: '15m' },
-    );
-    return { verificationToken };
+    return { verificationToken: this.tokens.issueBookingActionToken(bookingId) };
   }
 
   private async issue(user: AuthUser, ctx: RefreshContext): Promise<AuthResult> {

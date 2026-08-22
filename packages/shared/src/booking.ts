@@ -54,3 +54,30 @@ export const LoginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 export type Login = z.infer<typeof LoginSchema>;
+
+// AI assistant tool payloads. Validated with Zod (not class-validator) so the
+// global forbidNonWhitelisted pipe doesn't reject provider envelope metadata —
+// Zod strips unknown keys by default. Same shapes the web/staff API enforces.
+export const AiAvailabilitySchema = z.object({
+  propertyId: z.string().uuid(),
+  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}/),
+  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}/),
+  adults: z.coerce.number().int().min(1).max(20).default(2),
+  children: z.coerce.number().int().min(0).max(20).default(0),
+});
+export type AiAvailability = z.infer<typeof AiAvailabilitySchema>;
+
+export const AiOtpRequestSchema = z.object({
+  confirmationCode: z.string().min(1).max(20),
+  lastName: z.string().min(1).max(100),
+});
+
+export const AiOtpVerifySchema = z.object({
+  bookingId: z.string().uuid(),
+  code: z.string().length(6),
+});
+
+export const AiBookingActionSchema = z.object({
+  verificationToken: z.string().min(1).max(2000),
+  reason: z.string().max(500).optional(),
+});

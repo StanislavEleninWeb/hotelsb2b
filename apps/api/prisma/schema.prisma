@@ -90,6 +90,7 @@ enum DiscountType {
 }
 
 enum NotificationType {
+  BOOKING_RECEIVED // acknowledgement on create (awaiting payment)
   BOOKING_CONFIRMED
   BOOKING_MODIFIED
   BOOKING_CANCELLED

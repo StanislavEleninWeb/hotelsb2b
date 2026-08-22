@@ -28,6 +28,37 @@ export class TokenService {
     return this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret';
   }
 
+  // A SEPARATE secret for booking-action verification tokens so they can never be
+  // presented as an access token (AuthContextGuard verifies against accessSecret).
+  private bookingSecret(): string {
+    return (
+      this.config.get<string>('JWT_BOOKING_SECRET') ??
+      `${this.accessSecret()}:booking-action`
+    );
+  }
+
+  /** Short-lived token proving a booking-action OTP was verified (Phase 8). */
+  issueBookingActionToken(bookingId: string): string {
+    return this.jwt.sign({ bookingId, typ: 'booking_action' }, {
+      secret: this.bookingSecret(),
+      expiresIn: '15m',
+    });
+  }
+
+  verifyBookingActionToken(token: string): { bookingId: string } {
+    try {
+      const payload = this.jwt.verify<{ bookingId: string; typ?: string }>(token, {
+        secret: this.bookingSecret(),
+      });
+      if (payload.typ !== 'booking_action' || !payload.bookingId) {
+        throw new UnauthorizedException('Invalid verification token');
+      }
+      return { bookingId: payload.bookingId };
+    } catch {
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+  }
+
   issueAccessToken(user: AuthUser): string {
     const payload: AccessTokenPayload = {
       sub: user.id,
