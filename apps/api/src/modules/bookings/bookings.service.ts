@@ -56,14 +56,25 @@ export class BookingsService {
     // price it, then write the booking. If any room can't be reserved the whole
     // transaction rolls back — no partial bookings, no double-books (BK-07).
     const created = await this.prisma.$transaction(async (tx) => {
-      const guest = await tx.guest.create({
-        data: {
-          firstName: dto.primaryGuest.firstName,
-          lastName: dto.primaryGuest.lastName,
-          email: dto.primaryGuest.email ?? null,
-          phone: dto.primaryGuest.phone ?? null,
-        },
-      });
+      // Guest identity resolution (MIGRATION-PLAN invariant #1): if an email is
+      // given, reuse the existing guest with that email so booking history
+      // accumulates on one profile (ST-12); otherwise create a fresh guest.
+      const existing = dto.primaryGuest.email
+        ? await tx.guest.findFirst({
+            where: { email: dto.primaryGuest.email },
+            orderBy: { createdAt: 'desc' },
+          })
+        : null;
+      const guest =
+        existing ??
+        (await tx.guest.create({
+          data: {
+            firstName: dto.primaryGuest.firstName,
+            lastName: dto.primaryGuest.lastName,
+            email: dto.primaryGuest.email ?? null,
+            phone: dto.primaryGuest.phone ?? null,
+          },
+        }));
 
       const roomInputs: Prisma.BookingRoomCreateManyBookingInput[] = [];
       let subtotal = 0;
@@ -75,7 +86,12 @@ export class BookingsService {
           checkIn,
           checkOut,
         );
-        const priceMinor = await this.availability.priceStay(room.ratePlanId, checkIn, checkOut);
+        const priceMinor = await this.availability.priceStay(
+          room.ratePlanId,
+          checkIn,
+          checkOut,
+          tx,
+        );
         subtotal += priceMinor;
         roomInputs.push({
           propertyId: dto.propertyId,

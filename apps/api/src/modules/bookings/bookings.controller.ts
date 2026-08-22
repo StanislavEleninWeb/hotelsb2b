@@ -36,7 +36,10 @@ export class BookingsController {
     @Ctx() ctx: ActionContext,
     @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<Booking> {
-    return this.idempotency.execute(idempotencyKey, () => this.bookings.create(dto, ctx));
+    const fingerprint = IdempotencyService.fingerprint(['POST /bookings', dto]);
+    return this.idempotency.execute(idempotencyKey, fingerprint, () =>
+      this.bookings.create(dto, ctx),
+    );
   }
 
   // Public lookup by confirmation code + last name (MG-01). Tight rate limit.
@@ -46,14 +49,19 @@ export class BookingsController {
     return this.bookings.lookup(dto.confirmationCode, dto.lastName);
   }
 
+  // Direct id fetch is STAFF-ONLY (fail closed). Guests retrieve their booking
+  // through the verified POST /bookings/lookup (code + last name) above. Phase 4
+  // adds object-level (BOLA) scoping + a guest-authenticated self-service path.
   @Get(':id')
+  @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.FINANCE, StaffRole.ADMIN)
   get(@Param('id', ParseUUIDPipe) id: string): Promise<Booking> {
     return this.bookings.findByIdOrThrow(id);
   }
 
-  // Cancel is available to the booking holder flow; staff cancel goes through the
-  // staff panel. Object-level authorization is enforced in Phase 4.
+  // Cancel is a destructive action — STAFF-ONLY until Phase 4 adds guest identity
+  // verification (confirmation code + OTP). Never leave this unauthenticated.
   @Post(':id/cancel')
+  @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.ADMIN)
   @Audit('Booking', 'cancel')
   cancel(
     @Param('id', ParseUUIDPipe) id: string,

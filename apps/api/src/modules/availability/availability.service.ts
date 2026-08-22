@@ -43,9 +43,18 @@ export class AvailabilityService {
     return out;
   }
 
-  /** Price a stay for one rate plan: sum of nightly prices (RateRule override else base). */
-  async priceStay(ratePlanId: string, checkIn: Date, checkOut: Date): Promise<number> {
-    const ratePlan = await this.prisma.ratePlan.findUniqueOrThrow({
+  /**
+   * Price a stay for one rate plan: sum of nightly prices (RateRule override else
+   * base). Accepts a transaction client so callers inside `$transaction` don't
+   * borrow a second pooled connection (which can deadlock under load).
+   */
+  async priceStay(
+    ratePlanId: string,
+    checkIn: Date,
+    checkOut: Date,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<number> {
+    const ratePlan = await client.ratePlan.findUniqueOrThrow({
       where: { id: ratePlanId },
       include: { rules: true },
     });

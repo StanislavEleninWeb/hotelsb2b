@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import { Observable, tap } from 'rxjs';
+import { concatMap, Observable } from 'rxjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { contextFromRequest } from '../action-context';
 import { AUDIT_META, AuditMeta } from './audit.decorator';
@@ -32,9 +32,14 @@ export class AuditLogInterceptor implements NestInterceptor {
     const req = context.switchToHttp().getRequest<Request>();
     const ctx = contextFromRequest(req);
 
+    // Await the audit write before the response is emitted so it can't be lost on
+    // shutdown. A failed write is logged, never surfaced to the client, and never
+    // fails the already-committed operation. (Full atomicity — audit inside the
+    // service transaction — is a documented follow-up.)
     return next.handle().pipe(
-      tap((result) => {
-        void this.record(meta, ctx, result);
+      concatMap(async (result) => {
+        await this.record(meta, ctx, result);
+        return result;
       }),
     );
   }
