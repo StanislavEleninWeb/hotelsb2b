@@ -17,7 +17,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | 1 | Terraform base infra | 🟡 gate GREEN | pending review/commit |
 | 2 | Database schema (Prisma) | 🟡 gate GREEN | pending review/commit |
 | 3 | NestJS booking API core | 🟡 gate GREEN (PR open) | on feat/phase-3-booking-api |
-| 4 | Auth & access control | ⬜ | — |
+| 4 | Auth & access control | 🟡 gate GREEN (PR open) | on feat/phase-4-auth |
 | 5 | Public web app | ⬜ | — |
 | 6 | Internal staff panel | ⬜ | — |
 | 7 | Search & caching layer | ⬜ | — |
@@ -173,15 +173,33 @@ closed until then.
 
 ---
 
-## Phase 4 — Auth & Access Control  ⬜
+## Phase 4 — Auth & Access Control  🟡 gate GREEN  _(branch: feat/phase-4-auth, PR open)_
 
-**Satisfies:** `BK-02`, `MG-01`, `AI-03`, `ST-16`, `AD-02`, `NF-03`, §5.6.
+**Satisfies:** `BK-02` (guest account or guest), `MG-01`/`MG-02`/`MG-04` (guest
+self-service via BOLA), `AI-03` (identity-OTP for booking changes), `ST-16` (RBAC),
+`AD-02` (staff accounts/roles), `NF-03`, §5.4/§5.6.
 
-**Gate:** JWT access+refresh (rotated, hashed) for cookie web + bearer mobile;
-guest passwordless + password; staff RBAC roles; `RolesGuard` (BFLA) +
-`PropertyScopeGuard` (BOLA) on every scoped endpoint; identity-OTP flow for
-booking changes; CSRF on cookie routes; **integration test: Property-A front-desk
-user gets 403 on a Property-B booking with a valid token.**
+**Gate — all pass:**
+
+- [x] JWT access (~15m) + refresh (**hashed, rotated**, family reuse-detection with a grace window) — cookie (httpOnly, SameSite=Lax) and bearer, one flow.
+- [x] Guest auth: email+password **and** passwordless email-OTP; staff email+password (scrypt, no native dep).
+- [x] Guards: `RolesGuard` (BFLA) + **`PropertyScopeGuard` (BOLA)** — staff scope AND guest ownership, UUID-validated in-guard (400 not 500), 401/403/404 distinguished.
+- [x] Identity-OTP for booking changes — destination from the **booking record** (not request), attempts-limited, returns a short-lived verification token (Phase 8).
+- [x] CSRF double-submit for cookie sessions; bearer clients exempt.
+- [x] **Auth rate-limiting + per-identifier lockout** (§5.5) — 10/min endpoint cap, 3/min OTP, lockout after 5 failures; auth outcomes audited.
+- [x] Account-email integrity: partial unique index `WHERE isAccount=true` (anonymous guests may share an email; accounts can't) — **verified in Postgres**.
+- [x] Booking-flow guest attachment hardened: link to an existing guest only when authenticated as them.
+- [x] **GATE integration test (HTTP + supertest):** Property-A front-desk user → **403** on a Property-B booking with a valid token. Passes.
+
+**Verification evidence (2026-08-22):**
+- `pnpm --filter @hotel/api test` → **3 suites, 12 tests pass** (auth e2e ×7 incl. the gate, concurrency ×2, state machine ×3).
+- Boot smoke: `/auth/me` no token → 401, invalid token → 401, `/bookings/:id` no token → 401, wrong creds → 401.
+- Postgres: two anonymous same-email guests OK; two `isAccount=true` same-email → rejected by `Guest_account_email_unique`.
+- `pnpm -r typecheck` / `pnpm -r lint` clean.
+
+**Follow-ups (documented, non-blocking):** magic-link login (OTP covers passwordless
+for now); test-teardown open handles (works via `--forceExit`); body-based property
+scoping on create endpoints (id-param routes are scoped now).
 
 ---
 

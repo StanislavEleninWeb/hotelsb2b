@@ -56,17 +56,15 @@ export class BookingsService {
     // price it, then write the booking. If any room can't be reserved the whole
     // transaction rolls back — no partial bookings, no double-books (BK-07).
     const created = await this.prisma.$transaction(async (tx) => {
-      // Guest identity resolution (MIGRATION-PLAN invariant #1): if an email is
-      // given, reuse the existing guest with that email so booking history
-      // accumulates on one profile (ST-12); otherwise create a fresh guest.
-      const existing = dto.primaryGuest.email
-        ? await tx.guest.findFirst({
-            where: { email: dto.primaryGuest.email },
-            orderBy: { createdAt: 'desc' },
-          })
+      // Guest identity resolution (MIGRATION-PLAN invariant #1, hardened per review):
+      // link to an existing guest ONLY when the requester is authenticated as that
+      // guest — so booking history accrues on the account (ST-12) without letting an
+      // anonymous request attach a booking to someone else's account by email.
+      const authedGuest = ctx.actorGuestId
+        ? await tx.guest.findUnique({ where: { id: ctx.actorGuestId } })
         : null;
       const guest =
-        existing ??
+        authedGuest ??
         (await tx.guest.create({
           data: {
             firstName: dto.primaryGuest.firstName,

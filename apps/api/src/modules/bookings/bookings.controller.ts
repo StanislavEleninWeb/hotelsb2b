@@ -14,6 +14,7 @@ import { ActionContext, Ctx } from '../../common/action-context';
 import { Audit } from '../../common/audit/audit.decorator';
 import { AuditLogInterceptor } from '../../common/audit/audit-log.interceptor';
 import { Roles } from '../../common/auth/roles.decorator';
+import { PropertyScope } from '../../auth/guards/property-scope.guard';
 import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -49,19 +50,18 @@ export class BookingsController {
     return this.bookings.lookup(dto.confirmationCode, dto.lastName);
   }
 
-  // Direct id fetch is STAFF-ONLY (fail closed). Guests retrieve their booking
-  // through the verified POST /bookings/lookup (code + last name) above. Phase 4
-  // adds object-level (BOLA) scoping + a guest-authenticated self-service path.
+  // Object-level authorization (BOLA, §5.6): the owning guest OR staff scoped to
+  // the booking's property. PropertyScopeGuard 401s anonymous, 403s out-of-scope
+  // staff, 404s a guest asking for someone else's booking.
   @Get(':id')
-  @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.FINANCE, StaffRole.ADMIN)
+  @PropertyScope('booking', 'id')
   get(@Param('id', ParseUUIDPipe) id: string): Promise<Booking> {
     return this.bookings.findByIdOrThrow(id);
   }
 
-  // Cancel is a destructive action — STAFF-ONLY until Phase 4 adds guest identity
-  // verification (confirmation code + OTP). Never leave this unauthenticated.
+  // Cancel — owning guest or property-scoped staff (same BOLA rule).
   @Post(':id/cancel')
-  @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.ADMIN)
+  @PropertyScope('booking', 'id')
   @Audit('Booking', 'cancel')
   cancel(
     @Param('id', ParseUUIDPipe) id: string,
@@ -70,9 +70,11 @@ export class BookingsController {
     return this.bookings.cancel(id, body?.reason);
   }
 
-  // Staff-only guarded status transitions (confirm/check-in/check-out/no-show).
+  // Staff-only lifecycle transitions (confirm/check-in/check-out/no-show), scoped
+  // to the booking's property.
   @Post(':id/transition')
   @Roles(StaffRole.FRONT_DESK, StaffRole.MANAGER, StaffRole.ADMIN)
+  @PropertyScope('booking', 'id')
   @Audit('Booking', 'transition')
   transition(
     @Param('id', ParseUUIDPipe) id: string,

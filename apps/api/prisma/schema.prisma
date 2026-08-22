@@ -365,13 +365,15 @@ model Guest {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  bookings Booking[]   @relation("PrimaryGuest")
-  notes    GuestNote[]
-  reviews  Review[]
+  bookings      Booking[]      @relation("PrimaryGuest")
+  notes         GuestNote[]
+  reviews       Review[]
+  refreshTokens RefreshToken[]
+  otpCodes      OtpCode[]
 
-  // NOT unique: BK-02 allows repeat guest bookings with no account, so the same
-  // email recurs. Guest identity resolution (lookup-or-create, profile merge) is
-  // an application-layer decision — see MIGRATION-PLAN.md.
+  // NOT globally unique: BK-02 allows repeat guest bookings with no account, so the
+  // same email recurs across contact rows. Account rows (isAccount = true) ARE unique
+  // on email via a partial index added in the Phase 4 migration.
   @@index([email])
   @@index([phone])
 }
@@ -437,6 +439,7 @@ model Booking {
   refunds       Refund[]
   notifications Notification[]
   reviews       Review[]
+  otpCodes      OtpCode[]
 
   @@index([propertyId, checkIn, checkOut]) // staff calendar + availability window
   @@index([propertyId, status])
@@ -641,6 +644,7 @@ model User {
   createdRoomBlocks RoomBlock[]           @relation("RoomBlockCreatedBy")
   createdRefunds    Refund[]              @relation("RefundCreatedBy")
   guestNotes        GuestNote[]           @relation("GuestNoteAuthor")
+  refreshTokens     RefreshToken[]
 }
 
 // Property-scoped access for a staff user (§5.6). ADMIN role bypasses scoping in
@@ -682,4 +686,58 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([propertyId, createdAt])
   @@index([actorUserId])
+}
+
+// ─────────────────────── Auth (Phase 4) ───────────────────────
+
+enum OtpPurpose {
+  LOGIN // passwordless guest login
+  BOOKING_ACTION // identity verification for a booking change (phone/AI)
+}
+
+// Refresh tokens: stored HASHED (never plaintext), rotated on every use. `family`
+// links a rotation lineage; on reuse of an already-rotated token the whole family
+// is revoked (token-theft detection). Belongs to a staff User or a Guest.
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String?   @db.Uuid
+  guestId      String?   @db.Uuid
+  tokenHash    String    @unique
+  family       String    @db.Uuid
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?   @db.Uuid
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guest Guest? @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@index([family])
+  @@index([userId])
+  @@index([guestId])
+}
+
+// One-time codes: stored HASHED, short expiry, limited attempts. LOGIN codes go to
+// a guest's own email; BOOKING_ACTION codes go to the contact on the BOOKING record
+// (never a request-supplied destination — §5.4 caller-id spoofing defense).
+model OtpCode {
+  id          String     @id @default(uuid()) @db.Uuid
+  purpose     OtpPurpose
+  codeHash    String
+  guestId     String?    @db.Uuid
+  bookingId   String?    @db.Uuid
+  destination String // email/phone the code was sent to (redacted in logs)
+  expiresAt   DateTime
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  consumedAt  DateTime?
+  createdAt   DateTime   @default(now())
+
+  guest   Guest?   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([guestId])
+  @@index([bookingId])
 }

@@ -10,6 +10,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { RolesGuard } from './common/auth/roles.guard';
+import { AuthModule } from './auth/auth.module';
+import { AuthContextGuard } from './auth/guards/auth-context.guard';
+import { PropertyScopeGuard } from './auth/guards/property-scope.guard';
+import { CsrfGuard } from './auth/guards/csrf.guard';
 import { AvailabilityModule } from './modules/availability/availability.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { PropertiesModule } from './modules/properties/properties.module';
@@ -22,11 +26,12 @@ import { RatePlansModule } from './modules/rate-plans/rate-plans.module';
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? 'info',
-        // Pretty logs in dev; structured JSON (for CloudWatch) in prod.
+        // Pretty logs only in local dev; structured JSON (for CloudWatch) everywhere
+        // else — and no pino-pretty worker thread to leak in tests.
         transport:
-          process.env.NODE_ENV === 'production'
-            ? undefined
-            : { target: 'pino-pretty', options: { singleLine: true } },
+          process.env.NODE_ENV === 'development'
+            ? { target: 'pino-pretty', options: { singleLine: true } }
+            : undefined,
         // Correlation id per request; honor an inbound X-Request-Id if present.
         genReqId: (req, res) => {
           const existing = req.headers['x-request-id'];
@@ -52,6 +57,7 @@ import { RatePlansModule } from './modules/rate-plans/rate-plans.module';
     }),
     PrismaModule,
     RedisModule,
+    AuthModule,
     AvailabilityModule,
     BookingsModule,
     PropertiesModule,
@@ -59,9 +65,15 @@ import { RatePlansModule } from './modules/rate-plans/rate-plans.module';
     RatePlansModule,
   ],
   controllers: [AppController],
+  // Global guard order matters and runs top-to-bottom:
+  //   Throttler → AuthContext (populate req.user) → Roles (BFLA) →
+  //   PropertyScope (BOLA) → Csrf (cookie sessions).
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AuthContextGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PropertyScopeGuard },
+    { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

@@ -22,10 +22,11 @@ function parseChannel(raw: unknown): Channel {
 
 /** Build an ActionContext from the incoming request. */
 export function contextFromRequest(req: Request): ActionContext {
-  const user = (req as Request & { user?: { id?: string } }).user;
+  const user = (req as Request & { user?: { kind?: 'staff' | 'guest'; id?: string } }).user;
   return {
     channel: parseChannel(req.headers['x-channel']),
-    actorUserId: user?.id,
+    actorUserId: user?.kind === 'staff' ? user.id : undefined,
+    actorGuestId: user?.kind === 'guest' ? user.id : undefined,
     correlationId: (req as Request & { id?: string }).id?.toString(),
     ipAddress: req.ip,
   };
