@@ -22,7 +22,7 @@ it satisfies and a **verification gate** that makes "done" falsifiable. A phase 
 | 6 | Internal staff panel | 🟡 gate GREEN (PR open) | on feat/phase-6-staff |
 | 7 | Search & caching layer | 🟡 gate GREEN (PR open) | on feat/phase-7-search-cache |
 | 8 | AI assistant integration | 🟡 gate GREEN (PR open) | on feat/phase-8-ai |
-| 9 | Mobile app (Expo) | ⬜ | — |
+| 9 | Mobile app (Expo) | 🟡 gate GREEN (not run) | on feat/phase-9-mobile |
 | 10 | CI/CD pipeline | ⬜ | — |
 | 11 | Security hardening pass | ⬜ | — |
 
@@ -345,14 +345,36 @@ single default bucket + per-route `@Throttle`.
 
 ---
 
-## Phase 9 — Mobile App (Expo)  ⬜
+## Phase 9 — Mobile App (Expo)  🟡 gate GREEN (with caveats)  _(branch: feat/phase-9-mobile, PR open)_
 
-**Satisfies:** `NF-02`, guest flows `SD/BK/MG` on mobile, push `NT-01..03`.
+**Satisfies:** `NF-02` (native app on the same API), guest flows `SD-01`/`SD-03`/
+`SD-04`/`BK-01..08`/`MG-02` on mobile.
 
-**Gate:** Expo app reuses `packages/shared`; search/detail/booking/account;
-bearer JWT in SecureStore with refresh rotation; SNS push for
-`booking.confirmed|cancelled|checkin.reminder`; **no backend changes required
-beyond SNS platform apps.**
+**Gate:**
+
+- [x] Expo (RN 0.76 + TS) app in the monorepo, **reusing `packages/shared`** Zod
+  (`SearchQuerySchema`, `CreateBookingSchema`, `PrimaryGuestSchema`, `LoginSchema`, `formatMoney`) — typechecks + lints clean.
+- [x] **Bearer JWT in Expo SecureStore** with **refresh-token rotation** matching the Phase-4 bearer flow (client owns refresh; access ~15m). Verified auth flow + `/bookings/mine` with bearer.
+- [x] Full vertical **search → property → book** (create with idempotency key, hosted-payment stub, "awaiting payment confirmation"); account (login/register/my-bookings/sign-out).
+- [x] `metro.config.js` for the pnpm monorepo (watchFolders + nodeModulesPaths + symlinks) — **written deliberately but UNEXECUTED here**.
+- [x] `POST /devices/register` (auth, keyed to `req.user`) + `DeviceToken` table; the notification worker fans out booking events to a guest's devices (SNS-per-event-type design). Verified: 401 without auth, 201 with guest auth, row guest-owned.
+
+**The gate's literal claim is FALSE, and that's the finding.** "No backend changes
+beyond SNS platform apps" — mobile push required **two additions**: the
+`DeviceToken` table + `/devices/register` endpoint, and SNS publishing in the
+notification worker (stubbed — no AWS). Everything else *is* a pure new client of
+`/api/v1` (auth bearer mode, `/search`, `/properties/by-slug`, `/availability`,
+`/bookings`, `/bookings/mine` all already existed). Payment terminates at
+`PENDING_PAYMENT` exactly like web (provider SDK is a stub).
+
+**NOT verifiable here (recorded):** device builds and a running simulator, and
+**actual push delivery** (needs AWS SNS platform apps for FCM/APNs). The
+`@types/react` 18 (RN) vs 19 (web) conflict was resolved with a workspace override
+pinning `@types/react` to 19.
+
+**Verification evidence (2026-08-23):** `pnpm -r typecheck` / `pnpm -r lint` clean
+(incl. mobile); web+staff build; API 5 suites / 23 tests. Device-register endpoint
+live-checked. Mobile **not run** (no device/simulator build).
 
 ---
 
