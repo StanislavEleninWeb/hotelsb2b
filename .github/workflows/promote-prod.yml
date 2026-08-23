@@ -1,0 +1,52 @@
+name: Promote to prod
+
+# Promote the EXACT artifact already built + tested in staging — retag the
+# sha-tagged ECR image to prod and roll prod ECS. No rebuild (the tested bytes
+# are what ship).
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: 'Commit SHA of the staging image to promote'
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+  ECS_CLUSTER: hotel-prod-cluster
+
+jobs:
+  promote:
+    name: Retag & deploy prod
+    runs-on: ubuntu-latest
+    environment: production # required reviewers gate the promotion
+    strategy:
+      matrix:
+        app: [api, web, staff]
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      # Retag the already-tested image (no rebuild) to a prod tag.
+      - name: Retag ${{ matrix.app }} image
+        run: |
+          REPO="hotel-${{ matrix.app }}"
+          MANIFEST=$(aws ecr batch-get-image --repository-name "$REPO" \
+            --image-ids imageTag=${{ inputs.image_sha }} \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image --repository-name "$REPO" \
+            --image-tag prod --image-manifest "$MANIFEST"
+      - name: Roll prod ECS service
+        run: |
+          aws ecs update-service --cluster "$ECS_CLUSTER" \
+            --service "hotel-prod-${{ matrix.app }}" --force-new-deployment
+      - name: Wait for stable
+        run: |
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" \
+            --services "hotel-prod-${{ matrix.app }}"

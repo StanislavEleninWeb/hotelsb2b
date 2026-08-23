@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ['**']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 11.22.0
+  NODE_VERSION: 22
+
+jobs:
+  quality:
+    name: Lint · Typecheck · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared package
+        run: pnpm --filter @hotel/shared build
+      - name: Generate Prisma client
+        run: pnpm --filter @hotel/api exec prisma generate
+      - run: pnpm -r typecheck
+      - run: pnpm -r lint
+      - name: Build all apps
+        run: pnpm -r build
+
+  test:
+    name: Unit / integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hotel
+          POSTGRES_PASSWORD: hotel_dev_password
+          POSTGRES_DB: hotel
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hotel -d hotel"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      # CI Redis has no auth; app + tests read these.
+      DATABASE_URL: postgresql://hotel:hotel_dev_password@localhost:5432/hotel
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_BOOKING_SECRET: ci-booking-secret
+      AI_WEBHOOK_SECRET: ci-ai-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hotel/shared build
+      - name: Apply migrations
+        run: pnpm --filter @hotel/api exec prisma migrate deploy
+      - name: API tests
+        run: pnpm --filter @hotel/api test
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # IaC scanning — fail the build on misconfigurations (Plan/02 §5.7).
+      - name: tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform
+      # Checkov is the second IaC scanner (Plan/03). Its baseline hasn't been
+      # triaged locally yet, so it runs informationally (soft_fail) until Phase 11
+      # curates its findings; tfsec above is the verified hard gate.
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform
+          quiet: true
+          soft_fail: true
+      # Dependency vulnerability gate — fail on high/critical (Plan/02 §5.8).
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit dependencies (high/critical)
+        run: pnpm audit --audit-level high

@@ -1,0 +1,68 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths: ['terraform/**']
+  push:
+    branches: [main]
+    paths: ['terraform/**']
+
+permissions:
+  id-token: write # OIDC for AWS
+  contents: read
+
+jobs:
+  validate:
+    name: fmt · validate (no cloud)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Format check
+        run: terraform fmt -check -recursive terraform
+      - name: Validate staging
+        working-directory: terraform/staging
+        run: terraform init -backend=false && terraform validate
+      - name: Validate prod
+        working-directory: terraform/prod
+        run: terraform init -backend=false && terraform validate
+
+  plan:
+    name: plan (staging)
+    runs-on: ubuntu-latest
+    needs: validate
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Terraform plan
+        working-directory: terraform/staging
+        run: |
+          terraform init
+          terraform plan -input=false -var "assets_bucket_name=${{ vars.STAGING_ASSETS_BUCKET }}"
+
+  apply:
+    name: apply (staging, manual approval)
+    runs-on: ubuntu-latest
+    needs: validate
+    if: ${{ github.event_name == 'push' }}
+    # Environment protection = required reviewers gate the apply.
+    environment: staging-infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Terraform apply
+        working-directory: terraform/staging
+        run: |
+          terraform init
+          terraform apply -input=false -auto-approve -var "assets_bucket_name=${{ vars.STAGING_ASSETS_BUCKET }}"
