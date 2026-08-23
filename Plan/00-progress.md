@@ -432,20 +432,24 @@ Verification (2026-08-23):
 
 **Fixes landed this phase:**
 1. **Production-breaking CSP bug** (found by verifying prod, not dev): strict nonce
-   CSP blocked *every* script — no page hydrated. Fixed by setting the CSP on the
-   **request** header (Next reads the nonce there) in web+staff middleware, and
-   `export const dynamic = "force-dynamic"` on both root layouts. Verified `/account`
-   + `/search` hydrate in `NODE_ENV=production` with `script-src` carrying nonce +
-   `strict-dynamic` and **no `unsafe-eval`**.
+   CSP blocked *every* script — no page hydrated (Next applies its nonce only when it
+   reads one from the **request** CSP header; middleware set it on the response only).
+   Fixed by setting the CSP on the request header in web+staff middleware; `'strict-
+   dynamic'` neutralizes `'self'`, forcing a per-request nonce on every route, so
+   `export const dynamic = "force-dynamic"` on both root layouts (deliberate — trades
+   the guest site's static/ISR surface for the stronger CSP). **Browser-verified in
+   `NODE_ENV=production`** (web :3000 + staff :3001): every `<script>` nonced (16/16,
+   14/14), zero un-nonced inline, zero console/CSP errors, `reactHydrated===true` and
+   `__next_f` parsed on `/search` + `/login`. No `unsafe-eval`/`unsafe-inline` scripts.
 2. `DELETE /devices/:token` scoped to the caller (was authenticated but unscoped — BOLA).
 3. `THROTTLE_DISABLED=1` now ignored when `NODE_ENV==='production'`.
 4. API now emits `nosniff` / `X-Frame-Options: DENY` / `Referrer-Policy`.
 
 **Open findings (documented, tracked in the report, not blocking the gate):**
-residual Next inline-flight-script CSP gap (app degrades gracefully); §5.3 DB
-least-privilege (app uses RDS master user); checkov baseline → hard gate; guard
-fail-open-on-absent-metadata needs a CI coverage assertion; payment webhook when
-Stripe lands.
+§5.3 DB least-privilege (app uses RDS master user); checkov baseline → hard gate;
+guard fail-open-on-absent-metadata needs a CI coverage assertion; payment webhook
+when Stripe lands; the guest site is fully dynamic (force-dynamic) — revisit if
+static/ISR caching is needed for SEO.
 
 ---
 

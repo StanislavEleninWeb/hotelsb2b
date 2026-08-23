@@ -19,7 +19,7 @@ Date: 2026-08-23 · Branch: `feat/phase-11-security`
 |---|---|---|
 | 1 | Object- & function-level authorization (BOLA/BFLA) | ✅ PASS (1 fix; guards fail-open on absent metadata — see note) |
 | 2 | No raw string-concatenated SQL | ✅ PASS |
-| 3 | CSP + security headers on web/staff | ✅ PASS **after fixing a production-breaking CSP bug** |
+| 3 | CSP + security headers on web/staff | ✅ PASS (fixed a production-breaking CSP bug; verified in a browser) |
 | 4 | Webhook signature + replay verification | ✅ PASS (payment webhook N/A — deferred) |
 | 5 | Rate limiting on auth, search/availability, AI | ✅ PASS (+ THROTTLE_DISABLED now ignored in prod) |
 | 6 | No secrets in the repository (incl. git history) | ✅ PASS |
@@ -59,24 +59,36 @@ clamped to `1..50`. (Invariant #2.)
 ### 3. Web/staff CSP + headers — PASS (fixed a production-breaking bug)
 
 **Finding & fix (found by verifying production, not dev):** the strict nonce CSP was
-**completely broken in production** — with `'strict-dynamic'`, `'self'` is disabled, and
-Next never applied the nonce, so **every script was blocked and no page hydrated**. Two
-causes fixed:
-1. The middleware set the CSP only on the *response*; Next reads the nonce from the
-   **request** `Content-Security-Policy` header — now set on both (web + staff).
-2. Client pages were statically prerendered (no per-request nonce); `export const
-   dynamic = "force-dynamic"` on the root layout renders every route dynamically.
+**completely broken in production** — with `'strict-dynamic'`, the `'self'` source is
+neutralized, so a script runs *only* if it carries the request's nonce. Next applies its
+nonce only when it reads one from the **request** `Content-Security-Policy` header, but
+the middleware set the header on the *response* only → Next never saw a nonce → **every
+script was blocked and no page hydrated**. Two causes fixed:
+1. Set the CSP on the **request** header (as well as the response) in web + staff
+   middleware — Next now reads the nonce and stamps it on every `<script>` it emits.
+2. `'strict-dynamic'` neutralizing `'self'` means a per-request nonce is mandatory on
+   every route, which is incompatible with static prerendering. **Deliberate decision:**
+   `export const dynamic = "force-dynamic"` on both root layouts — the whole site renders
+   dynamically (SSR, still crawlable). *Tradeoff:* this gives up static generation / ISR
+   for the guest site. The alternative — dropping `'strict-dynamic'` and pinning
+   `script-src 'self' 'nonce-…'` — keeps static routes but loses the transitive-trust
+   protection strict-dynamic gives against injected `<script src>`. We chose the stronger
+   CSP; revisit if guest-page caching/SEO needs the static surface back.
 
-**Verified in `NODE_ENV=production`:** header carries `script-src 'self' 'nonce-…'
-'strict-dynamic'` with **no `unsafe-eval`**; external scripts load; `/account` and
-`/search` **hydrate and are interactive**. Plus `X-Frame-Options: DENY`, `nosniff`,
-`Referrer-Policy`, `Permissions-Policy` on every response (one shared definition,
-`@hotel/shared/security`). The API also emits `nosniff`/frame-deny/referrer now.
+**Verified in `NODE_ENV=production`, both web (:3000) and staff (:3001) in a browser:**
+- CSP header: `script-src 'self' 'nonce-…' 'strict-dynamic'` — **no `unsafe-eval`, no
+  `unsafe-inline` for scripts**.
+- Served HTML: **every** `<script>` carries the request nonce (web 16/16, staff 14/14);
+  **zero** un-nonced inline scripts — including Next's inline RSC flight-data scripts.
+- Browser: **zero console errors / zero CSP violations**; `reactHydrated === true`
+  (React fiber attached) and `window.__next_f` parsed (inline flight scripts *executed*)
+  on `/search` and `/login`. So the app genuinely hydrates under the strict CSP — this is
+  a clean pass, not a degraded one. (An earlier "inline scripts are blocked" observation
+  was pre-fix, before Next was reading the request-header nonce; it does not reproduce.)
 
-**Residual (documented):** Next's inline RSC flight-data scripts still aren't nonced by
-Next and are CSP-blocked; the app degrades gracefully (client re-fetches) and functions,
-but this should be closed before go-live — via Next's inline-script nonce support or a
-hashed allow-list. Tracked.
+Plus `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` on every
+response (one shared definition, `@hotel/shared/security`). The API also emits
+`nosniff`/frame-deny/referrer now.
 
 ### 4. Webhook signature + replay — PASS (payment N/A)
 
@@ -146,7 +158,6 @@ migration-privileged role, and a read-only role for reporting/read-replicas.
 
 ## Open items (tracked, not blocking this review)
 
-- Close the residual CSP inline-script gap before go-live (item 3).
 - Least-privilege DB roles (§5.3 finding above).
 - checkov baseline → hard gate (item 10).
 - Payment webhook with HMAC + replay when Stripe lands (item 4).
