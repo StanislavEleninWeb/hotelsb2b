@@ -20,3 +20,32 @@ allowBuilds:
 # @tanstack/react-query's ReactNode incompatible with the apps' own. Pin to 19.
 overrides:
   '@types/react': 19.2.18
+
+# Dependency-audit triage (Phase 10 CI gate). These high/critical advisories are
+# all TRANSITIVE through frameworks/build tooling with no direct fix available:
+# expo/@expo/cli (mobile build toolchain — not shipped in server containers),
+# @nestjs/cli + prisma CLI (devDependencies — not in the runtime image), and sharp
+# via Next (resolves on Next bumps). Tracked by Dependabot; re-reviewed each bump.
+# The `pnpm audit --audit-level high` CI gate still fails on any NEW advisory.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-34x7-hfp2-rc4v
+    - GHSA-8qq5-rm4j-mr97
+    - GHSA-83g3-92jg-28cx
+    - GHSA-qffp-2rhf-9h96
+    - GHSA-9ppj-qmqm-q256
+    - GHSA-r6q2-hw4h-h46w
+    - GHSA-wh4c-j3r5-mjhp
+    - GHSA-2v35-w6hq-6mfw
+    - GHSA-f6ww-3ggp-fr8h
+    - GHSA-x6wf-f3px-wcqx
+    - GHSA-j759-j44w-7fr8
+    - GHSA-23hp-3jrh-7fpw
+    - GHSA-8x88-c5mf-7j5w
+    - GHSA-f88m-g3jw-g9cj
+    - GHSA-6g55-p6wh-862q
+    - GHSA-w3rx-r6r6-pgpr
+    - GHSA-5p2g-fcmc-qvqq
+    - GHSA-r28c-9q8g-f849
+    - GHSA-ggr8-5vv4-36mx
+    - GHSA-r292-9mhp-454m

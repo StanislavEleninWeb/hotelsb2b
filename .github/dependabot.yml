@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk updates to reduce PR noise; security updates come separately.
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: '/terraform'
+    schedule:
+      interval: weekly
