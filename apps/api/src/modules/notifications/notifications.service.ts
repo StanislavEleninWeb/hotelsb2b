@@ -8,6 +8,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DevicesService } from '../devices/devices.service';
 
 export const NOTIFICATIONS_QUEUE = 'notifications';
 
@@ -23,6 +24,7 @@ export class NotificationsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly devices: DevicesService,
     @InjectQueue(NOTIFICATIONS_QUEUE) private readonly queue: Queue,
   ) {}
 
@@ -60,6 +62,25 @@ export class NotificationsService {
     if (!n || n.status === NotificationStatus.SENT) return;
     // Stub delivery. Phase 9 subscribes mobile push to the same event types.
     this.logger.log(`[notify] ${n.type} → ${n.channel} ${n.toAddress ?? '(no address)'}`);
+
+    // Mobile push fan-out (Phase 9): the same booking event goes to the guest's
+    // registered devices. Real delivery is SNS → FCM/APNs (per-event-type topics),
+    // deferred until AWS SNS platform apps exist; here we resolve the audience.
+    if (n.bookingId) {
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: n.bookingId },
+        select: { primaryGuestId: true },
+      });
+      if (booking) {
+        const devices = await this.devices.tokensForGuest(booking.primaryGuestId);
+        if (devices.length > 0) {
+          this.logger.log(
+            `[push] would publish ${n.type} to ${devices.length} device(s) via SNS topic "${n.type.toLowerCase()}"`,
+          );
+        }
+      }
+    }
+
     await this.prisma.notification.update({
       where: { id: notificationId },
       data: { status: NotificationStatus.SENT, sentAt: new Date() },

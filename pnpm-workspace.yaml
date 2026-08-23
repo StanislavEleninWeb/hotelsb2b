@@ -14,3 +14,9 @@ allowBuilds:
   prisma: true
   sharp: true
   unrs-resolver: true
+
+# Force a single @types/react across the monorepo. Web/staff use React 19 and
+# React Native 0.76 pulls @types/react 18 transitively — two copies make
+# @tanstack/react-query's ReactNode incompatible with the apps' own. Pin to 19.
+overrides:
+  '@types/react': 19.2.18

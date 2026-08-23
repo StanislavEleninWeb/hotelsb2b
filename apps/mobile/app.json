@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Harbor Stays",
+    "slug": "harbor-stays",
+    "scheme": "harborstays",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.harborstays.app" },
+    "android": { "package": "com.harborstays.app" },
+    "extra": {
+      "apiBaseUrl": "http://localhost:4000/api/v1"
+    }
+  }
+}

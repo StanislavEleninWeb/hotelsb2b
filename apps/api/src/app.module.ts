@@ -13,6 +13,7 @@ import { CacheModule } from './cache/cache.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SearchModule } from './modules/search/search.module';
 import { AiModule } from './modules/ai/ai.module';
+import { DevicesModule } from './modules/devices/devices.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { RolesGuard } from './common/auth/roles.guard';
 import { AuthModule } from './auth/auth.module';
@@ -90,6 +91,7 @@ import { GuestsModule } from './modules/guests/guests.module';
     RoomsModule,
     RatePlansModule,
     GuestsModule,
+    DevicesModule,
     NotificationsModule,
     SearchModule,
     AiModule,

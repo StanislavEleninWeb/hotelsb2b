@@ -371,6 +371,7 @@ model Guest {
   reviews       Review[]
   refreshTokens RefreshToken[]
   otpCodes      OtpCode[]
+  deviceTokens  DeviceToken[]
 
   // NOT globally unique: BK-02 allows repeat guest bookings with no account, so the
   // same email recurs across contact rows. Account rows (isAccount = true) ARE unique
@@ -646,6 +647,7 @@ model User {
   createdRefunds    Refund[]              @relation("RefundCreatedBy")
   guestNotes        GuestNote[]           @relation("GuestNoteAuthor")
   refreshTokens     RefreshToken[]
+  deviceTokens      DeviceToken[]
 }
 
 // Property-scoped access for a staff user (§5.6). ADMIN role bypasses scoping in
@@ -693,6 +695,29 @@ model AuditLog {
 enum OtpPurpose {
   LOGIN // passwordless guest login
   BOOKING_ACTION // identity verification for a booking change (phone/AI)
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+}
+
+// Mobile push registration (Phase 9). A device belongs to a staff User or a Guest.
+// The notification worker fans out booking events to these tokens via SNS→FCM/APNs.
+model DeviceToken {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String?        @db.Uuid
+  guestId   String?        @db.Uuid
+  token     String         @unique
+  platform  DevicePlatform
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guest Guest? @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([guestId])
 }
 
 // Refresh tokens: stored HASHED (never plaintext), rotated on every use. `family`

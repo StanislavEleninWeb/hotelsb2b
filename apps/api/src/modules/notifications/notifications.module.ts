@@ -1,5 +1,6 @@
 import { Module, Provider } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { DevicesModule } from '../devices/devices.module';
 import { NotificationsService, NOTIFICATIONS_QUEUE } from './notifications.service';
 import { NotificationsProcessor } from './notifications.processor';
 
@@ -9,7 +10,7 @@ const workerProviders: Provider[] =
   process.env.NODE_ENV === 'test' ? [] : [NotificationsProcessor];
 
 @Module({
-  imports: [BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE })],
+  imports: [DevicesModule, BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE })],
   providers: [NotificationsService, ...workerProviders],
   exports: [NotificationsService],
 })
