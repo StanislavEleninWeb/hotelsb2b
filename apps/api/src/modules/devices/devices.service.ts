@@ -19,8 +19,12 @@ export class DevicesService {
     });
   }
 
-  async unregister(token: string): Promise<void> {
-    await this.prisma.deviceToken.deleteMany({ where: { token } });
+  // Scope deletion to the caller's own tokens (BOLA — a user must not unregister
+  // another user's device by guessing its token value).
+  async unregister(user: AuthUser, token: string): Promise<void> {
+    const owner =
+      user.kind === 'staff' ? { userId: user.id } : { guestId: user.id };
+    await this.prisma.deviceToken.deleteMany({ where: { token, ...owner } });
   }
 
   tokensForGuest(guestId: string): Promise<DeviceToken[]> {

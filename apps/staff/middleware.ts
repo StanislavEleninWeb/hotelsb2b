@@ -9,14 +9,21 @@ export function middleware(request: NextRequest): NextResponse {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN ?? "http://localhost:4000";
 
+  const csp = buildContentSecurityPolicy({
+    nonce,
+    apiOrigin,
+    dev: process.env.NODE_ENV === "development",
+  });
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  // Next reads the nonce from the REQUEST CSP header and applies it to its scripts
+  // (and renders the route dynamically). Without this a strict CSP blocks ALL
+  // scripts in production.
+  requestHeaders.set("Content-Security-Policy", csp);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set(
-    "Content-Security-Policy",
-    buildContentSecurityPolicy({ nonce, apiOrigin, dev: process.env.NODE_ENV === "development" }),
-  );
+  response.headers.set("Content-Security-Policy", csp);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) response.headers.set(k, v);
   return response;
 }

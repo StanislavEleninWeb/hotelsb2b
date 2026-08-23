@@ -101,9 +101,9 @@ import { GuestsModule } from './modules/guests/guests.module';
   //   Throttler → AuthContext (populate req.user) → Roles (BFLA) →
   //   PropertyScope (BOLA) → Csrf (cookie sessions).
   providers: [
-    // THROTTLE_DISABLED=1 removes the global rate limiter (local load testing only —
-    // never set in staging/prod).
-    ...(process.env.THROTTLE_DISABLED === '1'
+    // THROTTLE_DISABLED=1 removes the global rate limiter for LOCAL load testing.
+    // Ignored in production so it can never disable rate limiting on a real deploy.
+    ...(process.env.THROTTLE_DISABLED === '1' && process.env.NODE_ENV !== 'production'
       ? []
       : [{ provide: APP_GUARD, useClass: ThrottlerGuard }]),
     { provide: APP_GUARD, useClass: AuthContextGuard },

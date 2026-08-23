@@ -412,10 +412,46 @@ lint, 23 API tests, tfsec 0 findings).
 
 ---
 
-## Phase 11 — Security Hardening Pass  ⬜
+## Phase 11 — Security Hardening Pass  🟢 gate GREEN  _(branch: feat/phase-11-security, PR open)_
 
 **Satisfies:** all of §5; `NF-03`, `NF-04`.
 
 **Gate:** the 10-point findings checklist in Plan/03 Phase 11 produced as a
 pass/fail markdown report with remediation applied. Re-run before every major
 release, not just once.
+
+**Evidence:** [`SECURITY-REVIEW.md`](../SECURITY-REVIEW.md) — 10-point checklist
++ the §5 items the ten bullets miss, each pass/fail with evidence & remediation.
+Verification (2026-08-23):
+- `pnpm -r typecheck` → 4 apps clean · `pnpm -r lint` → 4 apps clean.
+- `pnpm --filter @hotel/api test` → **23 passed / 5 suites** (BOLA 403/404, BFLA
+  403, concurrency, state machine).
+- `tfsec terraform` → **0 findings** (173 passed).
+- `pnpm audit --audit-level high` gate green (20 transitive advisories triaged in
+  `auditConfig.ignoreGhsas`; still fails on any NEW advisory).
+
+**Fixes landed this phase:**
+1. **Production-breaking CSP bug** (found by verifying prod, not dev): strict nonce
+   CSP blocked *every* script — no page hydrated. Fixed by setting the CSP on the
+   **request** header (Next reads the nonce there) in web+staff middleware, and
+   `export const dynamic = "force-dynamic"` on both root layouts. Verified `/account`
+   + `/search` hydrate in `NODE_ENV=production` with `script-src` carrying nonce +
+   `strict-dynamic` and **no `unsafe-eval`**.
+2. `DELETE /devices/:token` scoped to the caller (was authenticated but unscoped — BOLA).
+3. `THROTTLE_DISABLED=1` now ignored when `NODE_ENV==='production'`.
+4. API now emits `nosniff` / `X-Frame-Options: DENY` / `Referrer-Policy`.
+
+**Open findings (documented, tracked in the report, not blocking the gate):**
+residual Next inline-flight-script CSP gap (app degrades gracefully); §5.3 DB
+least-privilege (app uses RDS master user); checkov baseline → hard gate; guard
+fail-open-on-absent-metadata needs a CI coverage assertion; payment webhook when
+Stripe lands.
+
+---
+
+## ✅ All phases 0–11 complete
+
+Every phase in Plan/03 has passed its verification gate and been committed on its
+own branch → PR. Remaining work is the tracked open findings above plus the
+deferred product features (Stripe payments/webhook, GDPR export/delete, ID-doc
+upload) — all recorded, none blocking the build plan.

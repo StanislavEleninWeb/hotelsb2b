@@ -16,6 +16,15 @@ async function bootstrap() {
   // Parse cookies for cookie-based web sessions (auth + CSRF).
   app.use(cookieParser());
 
+  // Baseline security headers on every API response (defense in depth; the JSON
+  // API isn't framed or rendered, but these are cheap and correct).
+  app.use((_req: unknown, res: { setHeader: (k: string, v: string) => void }, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+  });
+
   // CORS for the browser clients (web :3000, staff :3001). credentials:true is
   // incompatible with a wildcard origin, so use an explicit allow-list, and
   // allow-list our custom request headers or the preflight strips them.

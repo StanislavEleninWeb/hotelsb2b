@@ -27,8 +27,11 @@ export class DevicesController {
   }
 
   @Delete(':token')
-  async unregister(@Param('token') token: string): Promise<{ ok: true }> {
-    await this.devices.unregister(token);
+  async unregister(
+    @Param('token') token: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<{ ok: true }> {
+    await this.devices.unregister(user, token);
     return { ok: true };
   }
 }
