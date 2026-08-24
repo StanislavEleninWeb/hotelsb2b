@@ -18,7 +18,7 @@ jobs:
     name: Lint · Typecheck · Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -65,7 +65,7 @@ jobs:
       AI_WEBHOOK_SECRET: ci-ai-secret
       NODE_ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -84,7 +84,7 @@ jobs:
     name: Security scans
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # IaC scanning — fail the build on misconfigurations (Plan/02 §5.7).
       - name: tfsec
         uses: aquasecurity/tfsec-action@v1.0.3
