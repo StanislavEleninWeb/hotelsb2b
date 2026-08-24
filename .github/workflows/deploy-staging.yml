@@ -23,7 +23,7 @@ jobs:
       matrix:
         app: [api, web, staff]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -45,7 +45,7 @@ jobs:
     needs: build-push
     environment: staging
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with: { version: 11.22.0 }
       - uses: actions/setup-node@v7
