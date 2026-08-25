@@ -9,14 +9,14 @@
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Prisma 7: the connection URL lives in prisma.config.ts (for the CLI) and is
+  // passed to PrismaClient via the pg driver adapter at runtime — not here.
 }
 
 generator client {
   provider = "prisma-client-js"
-  // "native" covers local dev (macOS/glibc CI); the musl target is required for the
-  // node:*-alpine runtime image — without it the query engine won't load in Docker.
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  // Prisma 7 uses the JS query compiler + a driver adapter (no Rust query engine),
+  // so no binaryTargets are needed — the client is engine-independent.
 }
 
 // ─────────────────────────── Enums ───────────────────────────
