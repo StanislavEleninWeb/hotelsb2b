@@ -13,7 +13,7 @@
     "@hotel/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.11",
     "next": "^15.1.4",
-    "react": "^19.0.0",
+    "react": "^19.2.8",
     "react-dom": "^19.0.0",
     "zod": "^3.24.1"
   },
