@@ -1,0 +1,55 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { browserFetch } from "../../lib/api";
+import { AUTH_QUERY_KEY, useAuth } from "../../lib/auth";
+
+// Auth-aware navigation. Signed out → "Sign in"; signed in → the account links plus
+// a "Sign out" action. While the session check is in flight we render no auth link at
+// all (rather than defaulting to "Sign in"), so a signed-in user never sees a stale
+// "Sign in" flash on load.
+export function Nav() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: user, isPending } = useAuth();
+
+  const logout = useMutation({
+    mutationFn: () => browserFetch("/auth/logout", { method: "POST" }),
+    onSuccess: async () => {
+      queryClient.setQueryData(AUTH_QUERY_KEY, null);
+      await queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEY });
+      router.replace("/");
+    },
+  });
+
+  return (
+    <nav className="nav">
+      <div className="container">
+        <Link href="/" className="brand">
+          Harbor Stays
+        </Link>
+        <div className="spacer" />
+        <Link href="/search">Search</Link>
+
+        {!isPending && user && (
+          <>
+            <Link href="/account">My bookings</Link>
+            {user.email && <span className="muted">{user.email}</span>}
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+            >
+              {logout.isPending ? "Signing out…" : "Sign out"}
+            </button>
+          </>
+        )}
+
+        {!isPending && !user && <Link href="/account/login">Sign in</Link>}
+      </div>
+    </nav>
+  );
+}

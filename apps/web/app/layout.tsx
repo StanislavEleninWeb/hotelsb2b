@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { QueryProvider } from "../lib/query-provider";
+import { Nav } from "./_components/nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,17 +19,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <QueryProvider>
-          <nav className="nav">
-            <div className="container">
-              <Link href="/" className="brand">
-                Harbor Stays
-              </Link>
-              <div className="spacer" />
-              <Link href="/search">Search</Link>
-              <Link href="/account">My bookings</Link>
-              <Link href="/account/login">Sign in</Link>
-            </div>
-          </nav>
+          <Nav />
           <main className="container">{children}</main>
         </QueryProvider>
       </body>
