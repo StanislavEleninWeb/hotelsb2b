@@ -1,17 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { GuestRegisterSchema, LoginSchema } from "@hotel/shared";
 import { browserFetch } from "../../../lib/api";
+import { AUTH_QUERY_KEY, useAuth } from "../../../lib/auth";
 import type { AuthUser } from "../../../lib/types";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: user } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [form, setForm] = useState({ email: "", password: "", firstName: "", lastName: "" });
   const [error, setError] = useState<string | null>(null);
+
+  // Already signed in? The login form is not accessible — send them to their account.
+  useEffect(() => {
+    if (user) router.replace("/account");
+  }, [user, router]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -22,9 +30,17 @@ export default function LoginPage() {
       const body = GuestRegisterSchema.parse(form);
       return browserFetch<{ user: AuthUser }>("/auth/register", { method: "POST", body });
     },
-    onSuccess: () => router.push("/account"),
+    onSuccess: async ({ user: signedIn }) => {
+      // Seed + refresh the shared auth query so the nav flips to signed-in immediately.
+      queryClient.setQueryData(AUTH_QUERY_KEY, signedIn);
+      await queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEY });
+      router.replace("/account");
+    },
     onError: (e) => setError((e as Error).message),
   });
+
+  // Don't flash the form while the redirect for an already-signed-in user is pending.
+  if (user) return <p className="muted">Redirecting…</p>;
 
   return (
     <>
