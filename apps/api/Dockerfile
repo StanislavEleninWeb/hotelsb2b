@@ -4,20 +4,38 @@ FROM node:22-alpine AS base
 RUN npm install -g pnpm@11.22.0
 WORKDIR /repo
 
-# --- deps: install with the full workspace manifest set (good layer caching) ---
+# --- deps: install with the FULL workspace manifest set. Every workspace package.json
+# must be present or pnpm re-resolves mid-build (a `pnpm exec`/`run` deps check would
+# trigger a full reinstall). This stage is discarded — the runtime image is built from
+# the pruned `pnpm deploy` output, not from here — so installing all workspaces is free. ---
 FROM base AS deps
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* .npmrc ./
 COPY packages/config/package.json packages/config/
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY apps/staff/package.json apps/staff/
+COPY apps/mobile/package.json apps/mobile/
 RUN pnpm install --frozen-lockfile
 
 # --- build: compile shared, then the api ---
 FROM deps AS build
 COPY . .
 RUN pnpm --filter @hotel/shared build \
+  && pnpm --filter @hotel/api exec prisma generate \
   && pnpm --filter @hotel/api build \
-  && pnpm --filter @hotel/api deploy --prod /app
+  && pnpm --filter @hotel/api deploy --prod --legacy /app
+# `prisma generate` above is required for `nest build` (tsc needs the generated
+# @prisma/client types: StaffRole, Channel, …) and produces the client + musl query
+# engine in the pnpm store. `pnpm deploy` copies only the un-generated @prisma/client
+# STUB into /app, so overlay the generated client (same package hash) onto the pruned
+# tree. The final `test` fails the build if the musl engine didn't land.
+RUN set -e; \
+    SRC=$(dirname "$(find /repo/node_modules/.pnpm -name 'libquery_engine-linux-musl-*.so.node' -path '*/.prisma/client/*' | head -1)"); \
+    DEST=$(find /app/node_modules/.pnpm -type d -path '*@prisma+client@*/node_modules/.prisma/client' | head -1); \
+    echo "prisma client: $SRC -> $DEST"; \
+    cp -a "$SRC/." "$DEST/"; \
+    test -n "$(ls "$DEST"/libquery_engine-linux-musl-*.so.node 2>/dev/null)"
 
 # --- runtime: minimal production image ---
 FROM node:22-alpine AS runtime

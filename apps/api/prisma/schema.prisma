@@ -14,6 +14,9 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  // "native" covers local dev (macOS/glibc CI); the musl target is required for the
+  // node:*-alpine runtime image — without it the query engine won't load in Docker.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 // ─────────────────────────── Enums ───────────────────────────

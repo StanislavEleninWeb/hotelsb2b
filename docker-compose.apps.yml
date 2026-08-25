@@ -1,0 +1,65 @@
+# Runs the API + web app in containers, on top of the Postgres/Redis from
+# docker-compose.yml. Always use BOTH files together:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.apps.yml up --build
+#
+# (The base file deliberately runs deps only; this file adds the apps.)
+#
+# NOTE: migrations are NOT run by these containers (the Prisma CLI is a devDep and
+# not in the runtime image). The existing postgres_data volume already has all
+# migrations + seed applied. If you ever `docker compose down -v` (wipes the volume),
+# re-create the schema from the host before starting the apps:
+#   pnpm --filter @hotel/api exec prisma migrate deploy
+#   pnpm --filter @hotel/api exec prisma db seed
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: hotel_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      # Service DNS names (postgres/redis) resolve on the compose network.
+      DATABASE_URL: postgresql://hotel:hotel_dev_password@postgres:5432/hotel
+      REDIS_URL: redis://:redis_dev_password@redis:6379
+      JWT_ACCESS_SECRET: dev-access-secret-please-change-000000000000
+      JWT_REFRESH_SECRET: dev-refresh-secret-please-change-00000000000
+      JWT_BOOKING_SECRET: dev-booking-secret-please-change-00000000000
+      AI_WEBHOOK_SECRET: dev-ai-webhook-secret-please-change-00000000
+      # Browser origins allowed by CORS (the host-mapped ports).
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:4000/api/v1/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: hotel_web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Next standalone binds to HOSTNAME; must be 0.0.0.0 to be reachable via the port map.
+      HOSTNAME: 0.0.0.0
+      # SSR (server-side) calls reach the API over the compose network. The browser
+      # uses the build-time NEXT_PUBLIC default (http://localhost:4000), which is
+      # correct via the host port map. Note the /api/v1 suffix.
+      API_BASE_URL: http://api:4000/api/v1
+    ports:
+      - "3000:3000"
