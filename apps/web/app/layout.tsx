@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   description: "Search and book hotels with real-time availability.",
 };
 
+// Render every route dynamically so the per-request CSP nonce (set in middleware)
+// reaches Next's inline + external scripts. A strict nonce CSP and static
+// prerendering are mutually exclusive — the app is dynamic (SSR, still crawlable).
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
