@@ -26,16 +26,19 @@ RUN pnpm --filter @hotel/shared build \
   && pnpm --filter @hotel/api build \
   && pnpm --filter @hotel/api deploy --prod --legacy /app
 # `prisma generate` above is required for `nest build` (tsc needs the generated
-# @prisma/client types: StaffRole, Channel, …) and produces the client + musl query
-# engine in the pnpm store. `pnpm deploy` copies only the un-generated @prisma/client
-# STUB into /app, so overlay the generated client (same package hash) onto the pruned
-# tree. The final `test` fails the build if the musl engine didn't land.
+# @prisma/client types: StaffRole, Channel, …) and produces the client + WASM query
+# compiler in the pnpm store (Prisma 7 has no native engine binary). At runtime
+# @prisma/client does `require('.prisma/client/default')`, which resolves to a sibling
+# `.prisma/client` dir next to the @prisma/client package — but `pnpm deploy` doesn't
+# create it. So copy the generated client from the build store into that exact path in
+# the pruned /app tree. The final `test` fails the build if the WASM compiler didn't land.
 RUN set -e; \
-    SRC=$(dirname "$(find /repo/node_modules/.pnpm -name 'libquery_engine-linux-musl-*.so.node' -path '*/.prisma/client/*' | head -1)"); \
-    DEST=$(find /app/node_modules/.pnpm -type d -path '*@prisma+client@*/node_modules/.prisma/client' | head -1); \
+    SRC=$(dirname "$(find /repo/node_modules/.pnpm -name 'query_compiler_fast_bg.wasm' -path '*/.prisma/client/*' | head -1)"); \
+    DEST="$(dirname "$(dirname "$(readlink -f /app/node_modules/@prisma/client)")")/.prisma/client"; \
     echo "prisma client: $SRC -> $DEST"; \
+    mkdir -p "$DEST"; \
     cp -a "$SRC/." "$DEST/"; \
-    test -n "$(ls "$DEST"/libquery_engine-linux-musl-*.so.node 2>/dev/null)"
+    test -f "$DEST/query_compiler_fast_bg.wasm"
 
 # --- runtime: minimal production image ---
 FROM node:22-alpine AS runtime

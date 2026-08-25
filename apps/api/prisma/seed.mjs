@@ -1,10 +1,13 @@
 // Dev seed: two properties with room types, rooms, rate plans, amenities, plus a
 // staff admin, a property-scoped front-desk user, and a guest account. Idempotent:
 // the two demo properties are recreated from scratch each run (dev only).
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { randomBytes, scryptSync } from 'node:crypto';
 
-const prisma = new PrismaClient();
+// Prisma 7: construct the client with the pg driver adapter (no built-in engine).
+const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL) });
 
 function hashPw(pw) {
   const salt = randomBytes(16);
