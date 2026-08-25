@@ -1,0 +1,29 @@
+# Keep the build context small and — critically — never let the host's
+# node_modules (macOS/darwin binaries) clobber the Linux deps installed in the
+# image's `deps` stage. Without this, `COPY . .` overwrites the container's
+# install and pnpm aborts a non-interactive reinstall.
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+
+# VCS / CI / IaC state
+.git
+.github
+terraform/**/.terraform
+terraform/**/*.tfstate*
+
+# Local env / secrets — must never bake into an image
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs, caches, coverage, editor
+**/*.log
+**/coverage
+**/.DS_Store
+**/.vscode
+**/.idea
+
+# Scratch / build-check tags
+scratchpad
