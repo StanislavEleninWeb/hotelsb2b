@@ -13,7 +13,7 @@ const cellLabel: React.CSSProperties = {
   fontSize: 10,
   letterSpacing: "0.14em",
   textTransform: "uppercase",
-  color: "color-mix(in srgb, var(--color-text) 55%, transparent)",
+  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
   marginBottom: 6,
 };
 
@@ -66,7 +66,7 @@ export default function BookingDetailPage() {
 
       <section className="pad stack-sm" style={{ paddingTop: 44, paddingBottom: 64, display: "grid", gridTemplateColumns: "8fr 4fr", gap: 56 }}>
         <div>
-          <Link href="/account" style={{ fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <Link href="/account" className="backlink">
             ← My bookings
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "24px 0 12px", flexWrap: "wrap" }}>
@@ -188,7 +188,7 @@ function SummaryCell({ label, value, sub, first }: { label: string; value: strin
 
 function DialogRow({ label, value, first, accent, muted }: { label: string; value: string; first?: boolean; accent?: boolean; muted?: boolean }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderTop: first ? undefined : "1px solid var(--color-hairline)", fontSize: 14, color: muted ? "color-mix(in srgb, var(--color-text) 60%, transparent)" : undefined }}>
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderTop: first ? undefined : "1px solid var(--color-hairline)", fontSize: 14, color: muted ? "color-mix(in srgb, var(--color-text) 72%, transparent)" : undefined }}>
       <span>{label}</span>
       <span className="num" style={{ color: accent ? "var(--color-accent-700)" : undefined }}>{value}</span>
     </div>

@@ -83,6 +83,7 @@ export default function AccountPage() {
                 type="button"
                 onClick={() => setTab(t.key)}
                 style={{
+                  minHeight: 44,
                   padding: "10px 18px",
                   fontSize: 12,
                   letterSpacing: "0.08em",
@@ -93,7 +94,7 @@ export default function AccountPage() {
                   border: 0,
                   borderLeft: i === 0 ? undefined : "1px solid var(--color-divider)",
                   background: active ? "var(--color-accent)" : "transparent",
-                  color: active ? "var(--color-bg)" : "color-mix(in srgb, var(--color-text) 60%, transparent)",
+                  color: active ? "var(--color-bg)" : "color-mix(in srgb, var(--color-text) 72%, transparent)",
                 }}
               >
                 {t.label} {groups[t.key].length}

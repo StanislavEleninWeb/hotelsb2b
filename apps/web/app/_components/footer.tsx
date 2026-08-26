@@ -11,7 +11,7 @@ export function Footer() {
         padding: "28px var(--pad-x)",
         borderTop: "2px solid var(--color-divider)",
         fontSize: 12,
-        color: "color-mix(in srgb, var(--color-text) 55%, transparent)",
+        color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
       }}
     >
       <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, color: "var(--color-text)", marginRight: "auto" }}>

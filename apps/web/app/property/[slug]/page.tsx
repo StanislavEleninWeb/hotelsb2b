@@ -39,7 +39,7 @@ const infoLabel: React.CSSProperties = {
   fontSize: 10,
   letterSpacing: "0.14em",
   textTransform: "uppercase",
-  color: "var(--color-accent)",
+  color: "var(--color-accent-text)",
   marginBottom: 6,
 };
 
@@ -88,7 +88,7 @@ export default async function PropertyPage({
 
       <section className="pad stack-sm" style={{ paddingTop: 44, display: "grid", gridTemplateColumns: "8fr 4fr", gap: 56 }}>
         <div>
-          <Link href="/search" style={{ fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <Link href="/search" className="backlink">
             ← All stays
           </Link>
           {property.city && (
@@ -118,7 +118,7 @@ export default async function PropertyPage({
 
         {/* Your stay */}
         <aside style={{ borderLeft: "2px solid var(--color-divider)", paddingLeft: 32 }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "color-mix(in srgb, var(--color-text) 55%, transparent)", marginBottom: 16 }}>
+          <div style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "color-mix(in srgb, var(--color-text) 72%, transparent)", marginBottom: 16 }}>
             Your stay
           </div>
           {datesValid ? (
@@ -136,7 +136,7 @@ export default async function PropertyPage({
 
       {/* Date picker */}
       <section className="pad" style={{ paddingTop: 40 }}>
-        <div style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "color-mix(in srgb, var(--color-text) 55%, transparent)", marginBottom: 8 }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "color-mix(in srgb, var(--color-text) 72%, transparent)", marginBottom: 8 }}>
           Choose your dates
         </div>
         <SearchForm defaults={{ checkIn, checkOut, adults, children }} />

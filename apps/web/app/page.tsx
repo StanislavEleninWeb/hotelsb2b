@@ -27,8 +27,8 @@ export default async function Home() {
           <span
             style={{
               display: "inline-block",
-              background: "var(--color-accent)",
-              color: "var(--color-bg)",
+              background: "var(--color-accent-600)",
+              color: "#fff",
               fontSize: 11,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
@@ -75,7 +75,7 @@ export default async function Home() {
           </span>
         </div>
 
-        {error && <p style={{ color: "var(--color-accent)" }}>{error}</p>}
+        {error && <p style={{ color: "var(--color-accent-text)" }}>{error}</p>}
 
         <div className="stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, background: "var(--color-divider)" }}>
           {properties.map((p) => (
@@ -134,15 +134,15 @@ export default async function Home() {
       <section
         className="pad stack-sm"
         data-reveal
-        style={{ background: "var(--color-accent)", color: "var(--color-bg)", padding: "72px var(--pad-x)", display: "grid", gridTemplateColumns: "8fr 4fr", gap: 48, alignItems: "end" }}
+        style={{ background: "var(--color-accent-600)", color: "#fff", padding: "72px var(--pad-x)", display: "grid", gridTemplateColumns: "8fr 4fr", gap: 48, alignItems: "end" }}
       >
-        <h2 style={{ fontSize: "clamp(36px, 5vw, 64px)", lineHeight: 1, letterSpacing: "-0.03em", color: "var(--color-bg)" }}>
+        <h2 style={{ fontSize: "clamp(36px, 5vw, 64px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#fff" }}>
           Book on the site
           <br />
           the front desk uses.
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start" }}>
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "color-mix(in srgb, #fff 88%, transparent)" }}>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "#fff" }}>
             Same availability, same prices, same audit trail — whether you book here, call, or talk to the assistant.
           </p>
           <Link

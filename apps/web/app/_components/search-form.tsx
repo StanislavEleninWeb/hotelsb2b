@@ -20,7 +20,7 @@ const cellLabel: React.CSSProperties = {
   fontSize: 10,
   letterSpacing: "0.14em",
   textTransform: "uppercase",
-  color: "color-mix(in srgb, var(--color-text) 55%, transparent)",
+  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
   marginBottom: 8,
 };
 const bigVal: React.CSSProperties = {
@@ -30,6 +30,7 @@ const bigVal: React.CSSProperties = {
   border: 0,
   background: "transparent",
   padding: 0,
+  minHeight: 44, // WCAG 2.5.5 target size
   width: "100%",
   color: "inherit",
 };
@@ -46,13 +47,13 @@ function Stepper({
   onChange: (v: number) => void;
 }) {
   const btn: React.CSSProperties = {
-    width: 28,
-    height: 28,
+    width: 44, // WCAG 2.5.5 target size
+    height: 44,
     border: "1px solid var(--color-divider)",
     background: "transparent",
     fontFamily: "var(--font-heading)",
     fontWeight: 800,
-    fontSize: 15,
+    fontSize: 18,
     cursor: "pointer",
     color: "inherit",
     lineHeight: 1,
@@ -142,7 +143,7 @@ export function SearchForm({ defaults }: { defaults?: Partial<Record<string, str
           Search →
         </button>
       </div>
-      <div style={{ padding: "12px 0 0", fontSize: 12, color: "color-mix(in srgb, var(--color-text) 55%, transparent)" }}>
+      <div style={{ padding: "12px 0 0", fontSize: 12, color: "color-mix(in srgb, var(--color-text) 72%, transparent)" }}>
         {nights > 0 ? `${nights} night${nights === 1 ? "" : "s"}` : "Select dates"} · {adults} adult
         {adults === 1 ? "" : "s"}
         {children > 0 ? `, ${children} child${children === 1 ? "" : "ren"}` : ""} · rates shown are totals, taxes included
