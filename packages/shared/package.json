@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@hotel/config": "workspace:*",
-    "eslint": "^9.17.0",
+    "eslint": "^10.9.1",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   }
