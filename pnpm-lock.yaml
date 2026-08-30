@@ -22,10 +22,10 @@ importers:
         version: link:../../packages/shared
       '@nest-lab/throttler-storage-redis':
         specifier: ^1.1.0
-        version: 1.2.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(@nestjs/throttler@6.5.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2))(ioredis@5.11.1(supports-color@8.1.1))(reflect-metadata@0.2.2)
+        version: 1.2.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(@nestjs/throttler@6.5.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2))(ioredis@6.0.0(supports-color@8.1.1))(reflect-metadata@0.2.2)
       '@nestjs/bullmq':
         specifier: ^11.0.0
-        version: 11.0.5(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(bullmq@6.2.0(ioredis@5.11.1(supports-color@8.1.1))(pg@8.23.0))
+        version: 11.0.5(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(bullmq@6.2.0(ioredis@6.0.0(supports-color@8.1.1))(pg@8.23.0))
       '@nestjs/common':
         specifier: ^11.0.1
         version: 11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
@@ -52,7 +52,7 @@ importers:
         version: 7.9.1(prisma@7.9.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3))(typescript@5.9.3)
       bullmq:
         specifier: ^6.2.0
-        version: 6.2.0(ioredis@5.11.1(supports-color@8.1.1))(pg@8.23.0)
+        version: 6.2.0(ioredis@6.0.0(supports-color@8.1.1))(pg@8.23.0)
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -63,8 +63,8 @@ importers:
         specifier: ^1.4.7
         version: 1.4.7
       ioredis:
-        specifier: ^5.4.2
-        version: 5.11.1(supports-color@8.1.1)
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@8.1.1)
       nestjs-pino:
         specifier: ^4.3.0
         version: 4.6.1(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(pino-http@11.0.0)(pino@10.3.1)(rxjs@7.8.2)
@@ -1776,8 +1776,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@ioredis/commands@1.10.0':
-    resolution: {integrity: sha512-UmeW7z4LfctwoQ5wkhVzgq8tXkreED2xZGpX+Bg+zA+WJFZCT6c062AfCK/Dfk81xZnnwdhJCUMkitihRaoC2Q==}
+  '@ioredis/commands@2.0.0':
+    resolution: {integrity: sha512-vrx0AE/T0h7cRZwfo1M39Cr+ZhZrkf0V8mQN75wucKCxCLD9l/VX6no3gFvrLqD1IlG/1LtzWovqEw3t0Vr9zg==}
 
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
@@ -4805,9 +4805,9 @@ packages:
   invariant@2.2.4:
     resolution: {integrity: sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==}
 
-  ioredis@5.11.1:
-    resolution: {integrity: sha512-ehuGcf94bQXhfagULNXrJdfnWO38v070jxSx/qE87Kjzmu2fU7ro5EFAb+OPituLqgfyuQaym5DlrNydW2sJ9A==}
-    engines: {node: '>=12.22.0'}
+  ioredis@6.0.0:
+    resolution: {integrity: sha512-f+Dtubxfpf6KYFq7WVXJoOLn0bk4TJrMrN9SzeE+jrWrCWj7XX3fA6vkryafhADX+GMymRxgDJDOI33COkJc0w==}
+    engines: {node: '>=20.0.0'}
 
   ip-regex@2.1.0:
     resolution: {integrity: sha512-58yWmlHpp7VYfcdTwMTvwMmqx/Elfxjd9RXTDyMsbL7lLWmhMylLEqiYVLKuLzOZqVgiWXD9MfR62Vv89VRxkw==}
@@ -6356,10 +6356,6 @@ packages:
 
   redis-errors@1.2.0:
     resolution: {integrity: sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w==}
-    engines: {node: '>=4'}
-
-  redis-parser@3.0.0:
-    resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
     engines: {node: '>=4'}
 
   reflect-metadata@0.2.2:
@@ -9354,7 +9350,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.20.1
 
-  '@ioredis/commands@1.10.0': {}
+  '@ioredis/commands@2.0.0': {}
 
   '@isaacs/cliui@8.0.2':
     dependencies:
@@ -9593,12 +9589,12 @@ snapshots:
       '@tybys/wasm-util': 0.10.3
     optional: true
 
-  '@nest-lab/throttler-storage-redis@1.2.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(@nestjs/throttler@6.5.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2))(ioredis@5.11.1(supports-color@8.1.1))(reflect-metadata@0.2.2)':
+  '@nest-lab/throttler-storage-redis@1.2.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(@nestjs/throttler@6.5.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2))(ioredis@6.0.0(supports-color@8.1.1))(reflect-metadata@0.2.2)':
     dependencies:
       '@nestjs/common': 11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
       '@nestjs/core': 11.2.1(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/platform-express@11.2.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/throttler': 6.5.0(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2)
-      ioredis: 5.11.1(supports-color@8.1.1)
+      ioredis: 6.0.0(supports-color@8.1.1)
       reflect-metadata: 0.2.2
       tslib: 2.8.1
 
@@ -9608,12 +9604,12 @@ snapshots:
       '@nestjs/core': 11.2.1(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/platform-express@11.2.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       tslib: 2.8.1
 
-  '@nestjs/bullmq@11.0.5(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(bullmq@6.2.0(ioredis@5.11.1(supports-color@8.1.1))(pg@8.23.0))':
+  '@nestjs/bullmq@11.0.5(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(bullmq@6.2.0(ioredis@6.0.0(supports-color@8.1.1))(pg@8.23.0))':
     dependencies:
       '@nestjs/bull-shared': 11.0.5(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)
       '@nestjs/common': 11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
       '@nestjs/core': 11.2.1(@nestjs/common@11.2.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/platform-express@11.2.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      bullmq: 6.2.0(ioredis@5.11.1(supports-color@8.1.1))(pg@8.23.0)
+      bullmq: 6.2.0(ioredis@6.0.0(supports-color@8.1.1))(pg@8.23.0)
       tslib: 2.8.1
 
   '@nestjs/cli@11.0.24(@types/node@22.20.1)(esbuild@0.27.7)(lightningcss@1.27.0)(postcss@8.4.31)(prettier@3.9.6)(uglify-js@3.19.3)':
@@ -11249,7 +11245,7 @@ snapshots:
       base64-js: 1.5.1
       ieee754: 1.2.1
 
-  bullmq@6.2.0(ioredis@5.11.1(supports-color@8.1.1))(pg@8.23.0):
+  bullmq@6.2.0(ioredis@6.0.0(supports-color@8.1.1))(pg@8.23.0):
     dependencies:
       cron-parser: 5.10.0
       msgpackr: 2.0.5
@@ -11257,7 +11253,7 @@ snapshots:
       semver: 7.8.5
       tslib: 2.8.1
     optionalDependencies:
-      ioredis: 5.11.1(supports-color@8.1.1)
+      ioredis: 6.0.0(supports-color@8.1.1)
       pg: 8.23.0
 
   bundle-require@5.1.0(esbuild@0.27.7):
@@ -12913,14 +12909,13 @@ snapshots:
     dependencies:
       loose-envify: 1.4.0
 
-  ioredis@5.11.1(supports-color@8.1.1):
+  ioredis@6.0.0(supports-color@8.1.1):
     dependencies:
-      '@ioredis/commands': 1.10.0
+      '@ioredis/commands': 2.0.0
       cluster-key-slot: 1.1.1
       debug: 4.4.3(supports-color@8.1.1)
       denque: 2.1.0
       redis-errors: 1.2.0
-      redis-parser: 3.0.0
       standard-as-callback: 2.1.0
     transitivePeerDependencies:
       - supports-color
@@ -14753,10 +14748,6 @@ snapshots:
       tslib: 2.8.1
 
   redis-errors@1.2.0: {}
-
-  redis-parser@3.0.0:
-    dependencies:
-      redis-errors: 1.2.0
 
   reflect-metadata@0.2.2: {}
 
